@@ -1,3 +1,7 @@
+use scanner::TokenParseResult::TokenFound;
+use scanner::TokenParseResult::Error;
+use scanner::TokenParseResult::NoToken;
+
 #[allow(dead_code)]
 #[derive(Clone)]
 pub enum TokenType {
@@ -29,20 +33,45 @@ pub enum TokenType {
 }
 #[warn(dead_code)]
 
+enum TokenParseResult {
+    TokenFound((TokenType, usize)),
+    NoToken(usize),
+    Error(String)
+}
+
 impl TokenType {
-    fn source_from_char (source: char) -> Result<TokenType, String> {
-        match source {
-            '(' => Ok(TokenType::LeftParen),
-            ')' => Ok(TokenType::RightParen),
-            '{' => Ok(TokenType::LeftBrace),
-            '}' => Ok(TokenType::RightBrace),
-            ',' => Ok(TokenType::COMMA),
-            '.' => Ok(TokenType::DOT),
-            '-' => Ok(TokenType::MINUS),
-            '+' => Ok(TokenType::PLUS),
-            ';' => Ok(TokenType::SEMICOLON),
-            '*' => Ok(TokenType::STAR),
-            _ => Err(format!("Token is not valid syntax: {}", source))
+    // Returns the number of characters to advance over
+    fn source_from_char (source: &String) -> TokenParseResult {
+        if source.len() < 2 {Error(String::from("Not enough characters left to deduce token."));}
+        let mut chars = source.chars();
+        match chars.next().expect("Have asserted that char is there") {
+            '(' => TokenFound((TokenType::LeftParen, 1)),
+            ')' => TokenFound((TokenType::RightParen, 1)),
+            '{' => TokenFound((TokenType::LeftBrace, 1)),
+            '}' => TokenFound((TokenType::RightBrace, 1)),
+            ',' => TokenFound((TokenType::COMMA, 1)),
+            '.' => TokenFound((TokenType::DOT, 1)),
+            '-' => TokenFound((TokenType::MINUS, 1)),
+            '+' => TokenFound((TokenType::PLUS, 1)),
+            ';' => TokenFound((TokenType::SEMICOLON, 1)),
+            '*' => TokenFound((TokenType::STAR, 1)),
+            '!' => if chars.next().expect("Have asserted that char is there") == '='
+                {TokenFound((TokenType::BangEqual, 2))} else {TokenFound((TokenType::BANG, 1))},
+            '=' => if chars.next().expect("Have asserted that char is there") == '='
+                {TokenFound((TokenType::EqualEqual, 2))} else {TokenFound((TokenType::EQUAL, 1))},
+            '<' => if chars.next().expect("Have asserted that char is there") == '='
+                {TokenFound((TokenType::LessEqual, 2))} else {TokenFound((TokenType::LESS, 1))},
+            '>' => if chars.next().expect("Have asserted that char is there") == '='
+                {TokenFound((TokenType::GreaterEqual, 2))} else {TokenFound((TokenType::GREATER, 1))},
+            '/' => if chars.next().expect("Have asserted that char is there") == '/'
+                {
+                    let num_comment_chars = chars.position(|x| x == '\n').expect("Expect a newline character");
+                    NoToken(num_comment_chars + 2)
+                } else {TokenFound((TokenType::SLASH, 1))}
+            ' ' => NoToken(1),
+            '\r' => NoToken(1),
+            '\t' => NoToken(1),
+            _ => Error(format!("Token is not valid syntax: {}", source))
         }
     }
 }
