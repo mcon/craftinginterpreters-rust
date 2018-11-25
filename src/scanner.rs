@@ -1,6 +1,8 @@
 use scanner::TokenParseResult::TokenFound;
 use scanner::TokenParseResult::Error;
 use scanner::TokenParseResult::NoToken;
+use std::str::Chars;
+use std::iter::FromIterator;
 
 #[allow(dead_code)]
 #[derive(Clone)]
@@ -23,7 +25,9 @@ pub enum TokenType {
     LessEqual,
 
     // Literals.
-    IDENTIFIER, STRING, NUMBER,
+    IDENTIFIER,
+    STRING (String),
+    NUMBER (f64),
 
     // Keywords.
     AND, CLASS, ELSE, FALSE, FUN, FOR, IF, NIL, OR,
@@ -39,42 +43,6 @@ enum TokenParseResult {
     Error(String)
 }
 
-impl TokenType {
-    // Returns the number of characters to advance over
-    fn source_from_char (source: &String) -> TokenParseResult {
-        if source.len() < 2 {Error(String::from("Not enough characters left to deduce token."));}
-        let mut chars = source.chars();
-        match chars.next().expect("Have asserted that char is there") {
-            '(' => TokenFound((TokenType::LeftParen, 1)),
-            ')' => TokenFound((TokenType::RightParen, 1)),
-            '{' => TokenFound((TokenType::LeftBrace, 1)),
-            '}' => TokenFound((TokenType::RightBrace, 1)),
-            ',' => TokenFound((TokenType::COMMA, 1)),
-            '.' => TokenFound((TokenType::DOT, 1)),
-            '-' => TokenFound((TokenType::MINUS, 1)),
-            '+' => TokenFound((TokenType::PLUS, 1)),
-            ';' => TokenFound((TokenType::SEMICOLON, 1)),
-            '*' => TokenFound((TokenType::STAR, 1)),
-            '!' => if chars.next().expect("Have asserted that char is there") == '='
-                {TokenFound((TokenType::BangEqual, 2))} else {TokenFound((TokenType::BANG, 1))},
-            '=' => if chars.next().expect("Have asserted that char is there") == '='
-                {TokenFound((TokenType::EqualEqual, 2))} else {TokenFound((TokenType::EQUAL, 1))},
-            '<' => if chars.next().expect("Have asserted that char is there") == '='
-                {TokenFound((TokenType::LessEqual, 2))} else {TokenFound((TokenType::LESS, 1))},
-            '>' => if chars.next().expect("Have asserted that char is there") == '='
-                {TokenFound((TokenType::GreaterEqual, 2))} else {TokenFound((TokenType::GREATER, 1))},
-            '/' => if chars.next().expect("Have asserted that char is there") == '/'
-                {
-                    let num_comment_chars = chars.position(|x| x == '\n').expect("Expect a newline character");
-                    NoToken(num_comment_chars + 2)
-                } else {TokenFound((TokenType::SLASH, 1))}
-            ' ' => NoToken(1),
-            '\r' => NoToken(1),
-            '\t' => NoToken(1),
-            _ => Error(format!("Token is not valid syntax: {}", source))
-        }
-    }
-}
 
 #[derive(Clone)]
 struct Token {
@@ -83,9 +51,12 @@ struct Token {
     line: usize
 }
 
-struct Scanner {
+// TODO MC: Add a lifetime parameter for source and make `source` reference.
+pub struct Scanner {
     source: String,
-    tokens: Vec<Token>
+    tokens: Vec<Token>,
+    line: usize,
+    errors: Vec<String>
 }
 
 impl Scanner {
@@ -93,39 +64,113 @@ impl Scanner {
     {
         Scanner{
             source: source,
-            tokens: Vec::new()
+            tokens: Vec::new(),
+            line: 0,
+            errors: Vec::new()
         }
     }
-    pub fn scan_tokens(&mut self) -> Vec<Token> {
-        let mut line = 0;
+    pub fn scan_tokens(&mut self) {
+        // TODO: clone hack
+        let mut temp_copy = self.source.clone();
+        let mut source_iter = temp_copy.chars();
+        let mut remaining_chars = source_iter.clone().count();
 
-        if !self.tokens.is_empty() {
-            // TODO: Slight hack for now: am returning copy of tokens in stead of reference.
-            return self.tokens.to_vec();
+        // TODO: error here
+        while remaining_chars > 0 {
+            if let Some(token) = self.scan_token(&mut source_iter) {
+                self.tokens.push(token)
+            }
+            remaining_chars = source_iter.clone().count();
+        }
+    }
+
+    fn scan_token(&mut self, remaining_source: &mut Chars) -> Option<Token> {
+        let next_char = remaining_source.next().expect("Have asserted that char is there");
+        let token_match = match next_char {
+            '(' => Some(TokenType::LeftParen),
+            ')' => Some(TokenType::RightParen),
+            '{' => Some(TokenType::LeftBrace),
+            '}' => Some(TokenType::RightBrace),
+            ',' => Some(TokenType::COMMA),
+            '.' => Some(TokenType::DOT),
+            '-' => Some(TokenType::MINUS),
+            '+' => Some(TokenType::PLUS),
+            ';' => Some(TokenType::SEMICOLON),
+            '*' => Some(TokenType::STAR),
+            '!' => if remaining_source.next().expect("Have asserted that char is there") == '='
+                {Some(TokenType::BangEqual)} else {Some(TokenType::BANG)},
+            '=' => if remaining_source.next().expect("Have asserted that char is there") == '='
+                {Some(TokenType::EqualEqual)} else {Some(TokenType::EQUAL)},
+            '<' => if remaining_source.next().expect("Have asserted that char is there") == '='
+                {Some(TokenType::LessEqual)} else {Some(TokenType::LESS)},
+            '>' => if remaining_source.next().expect("Have asserted that char is there") == '='
+                {Some(TokenType::GreaterEqual)} else {Some(TokenType::GREATER)},
+            '/' => if remaining_source.next().expect("Have asserted that char is there") == '/'
+                {
+                    remaining_source.skip_while(|x| *x != '\n').next();
+                    None
+                } else {Some(TokenType::SLASH)}
+            ' ' => None,
+            '\r' => None,
+            '\t' => None,
+            '\n' => {
+                self.line += 1;
+                None
+            }
+            '"' => self.scan_string(remaining_source),
+            '0' ... '9' => self.scan_number(remaining_source),
+            _ => {
+                self.errors.push(format!("Unexpected identifier: {} on line {}", next_char, self.line));
+                None
+            }
+        };
+        Some(Token {
+            token_type: token_match?,
+            lexeme: format!("{}", next_char), // TODO: get both identifiers
+            line: self.line
+        })
+    }
+
+    fn scan_string(&mut self, remaining_source: &mut Chars) -> Option<TokenType> {
+        let string : String;
+        {
+            let mut string_iter =
+                remaining_source.take_while(|x| x.ne(&'"'));
+            string = String::from_iter(string_iter);
+        }
+        if remaining_source.peekable().peek().is_none() {
+            self.errors.push(format!("Unterminated string starting on line {}", self.line));
+            return None;
         }
 
-        for (idx, character) in self.source.chars().enumerate() {
-            match character {
-                '\n' => line+=1,
-                _ => {
-                    let token = Scanner::scan_token(format!("{}", character).as_str(), idx);
-                    self.tokens.push(token);
+        let newlines: String =  string.matches('\n').collect();
+        self.line += newlines.len();
+        Some(TokenType::STRING(string))
+    }
 
+    fn scan_number(&mut self, remaining_source: &mut Chars) -> Option<TokenType> {
+        {
+            let mut string_iter =
+                remaining_source.take_while(|x| x.is_digit(10) || x.eq(&'.'));
+            let string : String = string_iter.collect();
+            if string.ends_with('.') {
+                self.errors.push(format!("Number not permitted to end with '.' {}", self.line));
+                return None;
+            }
+            match string.parse::<f64>() {
+                Ok(result) => return Some(TokenType::NUMBER(result)),
+                Err(_) => {
+                    self.errors.push(format!("Unable to parse number on line {}", self.line));
+                    return None
                 }
             }
         }
-        self.tokens.push(Token{token_type: TokenType::EOF, lexeme: String::new(), line: line});
-
-        return self.tokens.to_vec();
-        // TODO: Should return errors from this function as a vector to be handled by parent code - print for now.
-    }
-
-    pub fn scan_token(remaining_source: &str, line: usize) -> Token {
-        let character = remaining_source.chars().next().expect("Sholudn't be at end");
-        Token {
-            token_type: TokenType::source_from_char(character).expect(format!("Token: '{}' on line {} should be valid", character, line).as_str()),
-            lexeme: format!("{}", character),
-            line: line
+        if remaining_source.peekable().peek().is_none() {
+            self.errors.push(format!("Unterminated number starting on line {}", self.line));
+            return None;
         }
+
+        self.errors.push(format!("Unknown error parsing number on line {}", self.line));
+        None
     }
 }

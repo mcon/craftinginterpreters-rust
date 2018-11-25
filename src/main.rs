@@ -44,5 +44,6 @@ fn run_file(source_file: &String) {
 }
 
 fn run(source: String) {
-
+    let mut scanner = scanner::Scanner::new(source);
+    let tokens = scanner.scan_tokens();
 }
