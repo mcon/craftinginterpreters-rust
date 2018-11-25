@@ -46,4 +46,6 @@ fn run_file(source_file: &String) {
 fn run(source: String) {
     let mut scanner = scanner::Scanner::new(source);
     let tokens = scanner.scan_tokens();
+    let tokens_as_string = tokens.iter().map(|x| format!("{:?}", x)).collect::<Vec<String>>();
+    println!("tokens in statement: {:?}", tokens_as_string.join(", "));
 }

@@ -6,6 +6,7 @@ use std::iter::FromIterator;
 
 #[allow(dead_code)]
 #[derive(Clone)]
+#[derive(Debug)]
 pub enum TokenType {
     // Single-character tokens.
     LeftParen,
@@ -25,7 +26,7 @@ pub enum TokenType {
     LessEqual,
 
     // Literals.
-    IDENTIFIER,
+    IDENTIFIER(String),
     STRING (String),
     NUMBER (f64),
 
@@ -45,7 +46,8 @@ enum TokenParseResult {
 
 
 #[derive(Clone)]
-struct Token {
+#[derive(Debug)]
+pub struct Token {
     token_type: TokenType,
     lexeme: String,
     line: usize
@@ -69,7 +71,7 @@ impl Scanner {
             errors: Vec::new()
         }
     }
-    pub fn scan_tokens(&mut self) {
+    pub fn scan_tokens(&mut self) -> &Vec<Token> {
         // TODO: clone hack
         let mut temp_copy = self.source.clone();
         let mut source_iter = temp_copy.chars();
@@ -82,6 +84,8 @@ impl Scanner {
             }
             remaining_chars = source_iter.clone().count();
         }
+
+        return &self.tokens;
     }
 
     fn scan_token(&mut self, remaining_source: &mut Chars) -> Option<Token> {
@@ -118,11 +122,18 @@ impl Scanner {
                 None
             }
             '"' => self.scan_string(remaining_source),
-            '0' ... '9' => self.scan_number(remaining_source),
-            _ => {
-                self.errors.push(format!("Unexpected identifier: {} on line {}", next_char, self.line));
-                None
-            }
+            character @ '0' ... '9' => {
+                let mut last_character = character.to_string();
+                let mut larger_string_iter = last_character.chars().chain(remaining_source);
+
+                self.scan_number(&mut larger_string_iter)
+            },
+            character => {
+                let mut last_character = character.to_string();
+                let mut larger_string_iter = last_character.chars().chain(remaining_source);
+
+                self.scan_keyword_or_identifier(&mut larger_string_iter)
+            },
         };
         Some(Token {
             token_type: token_match?,
@@ -148,7 +159,9 @@ impl Scanner {
         Some(TokenType::STRING(string))
     }
 
-    fn scan_number(&mut self, remaining_source: &mut Chars) -> Option<TokenType> {
+    fn scan_number<I>(&mut self, remaining_source: &mut I) -> Option<TokenType>
+        where I: Iterator<Item = char>
+    {
         {
             let mut string_iter =
                 remaining_source.take_while(|x| x.is_digit(10) || x.eq(&'.'));
@@ -165,12 +178,36 @@ impl Scanner {
                 }
             }
         }
-        if remaining_source.peekable().peek().is_none() {
-            self.errors.push(format!("Unterminated number starting on line {}", self.line));
-            return None;
-        }
 
         self.errors.push(format!("Unknown error parsing number on line {}", self.line));
         None
+    }
+
+    fn scan_keyword_or_identifier<I>(&mut self, remaining_source: &mut I) -> Option<TokenType>
+        where I: Iterator<Item = char>
+    {
+        let mut string_iter =
+            remaining_source.take_while(|x| x.is_alphanumeric());
+        let string : String = string_iter.collect();
+
+        match string.as_str() {
+            "and" => Some(TokenType::AND),
+            "class" => Some(TokenType::CLASS),
+            "else" => Some(TokenType::ELSE),
+            "false" => Some(TokenType::FALSE),
+            "for" => Some(TokenType::FOR),
+            "fun" => Some(TokenType::FUN),
+            "if" => Some(TokenType::IF),
+            "nil" => Some(TokenType::NIL),
+            "or" => Some(TokenType::OR),
+            "print" => Some(TokenType::PRINT),
+            "return" => Some(TokenType::RETURN),
+            "super" => Some(TokenType::SUPER),
+            "this" => Some(TokenType::THIS),
+            "true" => Some(TokenType::TRUE),
+            "var" => Some(TokenType::VAR),
+            "while" => Some(TokenType::WHILE),
+            identifier => Some(TokenType::IDENTIFIER(identifier.to_string()))
+        }
     }
 }
