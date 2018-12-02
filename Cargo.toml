@@ -1,5 +1,5 @@
 [package]
-name = "lox-rust"
+name = "loxrust"
 version = "0.1.0"
 authors = ["Matthew Constable <bonsty@gmail.com>"]
 

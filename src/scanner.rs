@@ -4,6 +4,7 @@ use scanner::TokenParseResult::NoToken;
 use std::str::Chars;
 use std::iter::FromIterator;
 
+
 #[allow(dead_code)]
 #[derive(Clone)]
 #[derive(Debug)]
@@ -13,7 +14,13 @@ pub enum TokenType {
     RightParen,
     LeftBrace,
     RightBrace,
-    COMMA, DOT, MINUS, PLUS, SEMICOLON, SLASH, STAR,
+    COMMA,
+    DOT,
+    MINUS,
+    PLUS,
+    SEMICOLON,
+    SLASH,
+    STAR,
 
     // One or two character tokens.
     BANG,
@@ -27,17 +34,31 @@ pub enum TokenType {
 
     // Literals.
     IDENTIFIER(String),
-    STRING (String),
-    NUMBER (f64),
+    STRING(String),
+    NUMBER(f64),
 
     // Keywords.
-    AND, CLASS, ELSE, FALSE, FUN, FOR, IF, NIL, OR,
-    PRINT, RETURN, SUPER, THIS, TRUE, VAR, WHILE,
+    AND,
+    CLASS,
+    ELSE,
+    FALSE,
+    FUN,
+    FOR,
+    IF,
+    NIL,
+    OR,
+    PRINT,
+    RETURN,
+    SUPER,
+    THIS,
+    TRUE,
+    VAR,
+    WHILE,
 
     EOF
 }
-#[warn(dead_code)]
 
+#[warn(dead_code)]
 enum TokenParseResult {
     TokenFound((TokenType, usize)),
     NoToken(usize),
@@ -62,9 +83,9 @@ pub struct Scanner {
 }
 
 impl Scanner {
-    pub fn new (source: String) -> Scanner
+    pub fn new(source: String) -> Scanner
     {
-        Scanner{
+        Scanner {
             source: source,
             tokens: Vec::new(),
             line: 0,
@@ -102,18 +123,18 @@ impl Scanner {
             ';' => Some(TokenType::SEMICOLON),
             '*' => Some(TokenType::STAR),
             '!' => if remaining_source.next().expect("Have asserted that char is there") == '='
-                {Some(TokenType::BangEqual)} else {Some(TokenType::BANG)},
+                { Some(TokenType::BangEqual) } else { Some(TokenType::BANG) },
             '=' => if remaining_source.next().expect("Have asserted that char is there") == '='
-                {Some(TokenType::EqualEqual)} else {Some(TokenType::EQUAL)},
+                { Some(TokenType::EqualEqual) } else { Some(TokenType::EQUAL) },
             '<' => if remaining_source.next().expect("Have asserted that char is there") == '='
-                {Some(TokenType::LessEqual)} else {Some(TokenType::LESS)},
+                { Some(TokenType::LessEqual) } else { Some(TokenType::LESS) },
             '>' => if remaining_source.next().expect("Have asserted that char is there") == '='
-                {Some(TokenType::GreaterEqual)} else {Some(TokenType::GREATER)},
+                { Some(TokenType::GreaterEqual) } else { Some(TokenType::GREATER) },
             '/' => if remaining_source.next().expect("Have asserted that char is there") == '/'
                 {
                     remaining_source.skip_while(|x| *x != '\n').next();
                     None
-                } else {Some(TokenType::SLASH)}
+                } else { Some(TokenType::SLASH) }
             ' ' => None,
             '\r' => None,
             '\t' => None,
@@ -122,7 +143,7 @@ impl Scanner {
                 None
             }
             '"' => self.scan_string(remaining_source),
-            character @ '0' ... '9' => {
+            character @ '0'...'9' => {
                 let mut last_character = character.to_string();
                 let mut larger_string_iter = last_character.chars().chain(remaining_source);
 
@@ -143,7 +164,7 @@ impl Scanner {
     }
 
     fn scan_string(&mut self, remaining_source: &mut Chars) -> Option<TokenType> {
-        let string : String;
+        let string: String;
         {
             let mut string_iter =
                 remaining_source.take_while(|x| x.ne(&'"'));
@@ -154,18 +175,18 @@ impl Scanner {
             return None;
         }
 
-        let newlines: String =  string.matches('\n').collect();
+        let newlines: String = string.matches('\n').collect();
         self.line += newlines.len();
         Some(TokenType::STRING(string))
     }
 
     fn scan_number<I>(&mut self, remaining_source: &mut I) -> Option<TokenType>
-        where I: Iterator<Item = char>
+        where I: Iterator<Item=char>
     {
         {
             let mut string_iter =
                 remaining_source.take_while(|x| x.is_digit(10) || x.eq(&'.'));
-            let string : String = string_iter.collect();
+            let string: String = string_iter.collect();
             if string.ends_with('.') {
                 self.errors.push(format!("Number not permitted to end with '.' {}", self.line));
                 return None;
@@ -184,11 +205,11 @@ impl Scanner {
     }
 
     fn scan_keyword_or_identifier<I>(&mut self, remaining_source: &mut I) -> Option<TokenType>
-        where I: Iterator<Item = char>
+        where I: Iterator<Item=char>
     {
         let mut string_iter =
             remaining_source.take_while(|x| x.is_alphanumeric());
-        let string : String = string_iter.collect();
+        let string: String = string_iter.collect();
 
         match string.as_str() {
             "and" => Some(TokenType::AND),

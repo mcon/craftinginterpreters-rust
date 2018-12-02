@@ -1,11 +1,11 @@
 extern crate argparse;
+extern crate loxrust;
 
 use std::io::{self, Read};
 use argparse::{ArgumentParser, Store};
 use std::fs::File;
 use std::io::BufReader;
 use std::io::prelude::*;
-mod scanner;
 
 fn main() {
     let mut file_name = String::new();
@@ -23,7 +23,7 @@ fn main() {
     }
 }
 
-fn run_prompt() {
+pub fn run_prompt() {
     let stdin = io::stdin();
     for line in stdin.lock().lines() {
         let line = line.unwrap();
@@ -32,7 +32,7 @@ fn run_prompt() {
     }
 }
 
-fn run_file(source_file: &String) {
+pub fn run_file(source_file: &String) {
     let file = File::open(source_file).expect("failed to open file");
 
     let mut buf_reader = BufReader::new(file);
@@ -43,8 +43,8 @@ fn run_file(source_file: &String) {
     run(contents);
 }
 
-fn run(source: String) {
-    let mut scanner = scanner::Scanner::new(source);
+pub fn run(source: String) {
+    let mut scanner = loxrust::scanner::Scanner::new(source);
     let tokens = scanner.scan_tokens();
     let tokens_as_string = tokens.iter().map(|x| format!("{:?}", x)).collect::<Vec<String>>();
     println!("tokens in statement: {:?}", tokens_as_string.join(", "));
