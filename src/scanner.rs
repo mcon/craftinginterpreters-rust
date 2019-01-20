@@ -3,6 +3,7 @@ use scanner::TokenParseResult::Error;
 use scanner::TokenParseResult::NoToken;
 use std::str::Chars;
 use std::iter::FromIterator;
+use std::mem::discriminant;
 
 
 #[allow(dead_code)]
@@ -57,6 +58,23 @@ pub enum TokenType {
 
     EOF
 }
+impl PartialEq for TokenType {
+    fn eq(&self, other: &TokenType) -> bool {
+        let self_type = discriminant(self);
+        if (self_type == discriminant(other)) {
+            return match (self, other) {
+                (TokenType::IDENTIFIER(self_i_string), TokenType::IDENTIFIER(other_i_string)) =>
+                    self_i_string == other_i_string,
+                (TokenType::STRING(self_s_string), TokenType::STRING(other_s_string)) =>
+                    self_s_string == other_s_string,
+                // TokenType::NUMBER isn't included here, as floats don't have a well defined notion of equality.
+                _ => true
+            }
+        }
+        false
+    }
+}
+impl Eq for TokenType {}
 
 #[warn(dead_code)]
 enum TokenParseResult {
@@ -67,6 +85,7 @@ enum TokenParseResult {
 
 
 #[derive(Clone)]
+#[derive(Eq, PartialEq)]
 #[derive(Debug)]
 pub struct Token {
     token_type: TokenType,
@@ -230,5 +249,26 @@ impl Scanner {
             "while" => Some(TokenType::WHILE),
             identifier => Some(TokenType::IDENTIFIER(identifier.to_string()))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn equals_statement()
+    {
+        let source = "foobar == 2";
+
+        let mut scanner = Scanner::new(source.to_string());
+        let tokens = scanner.scan_tokens();
+
+        // TODO: Change this test to expect the correct lexemes.
+        let expected = vec![
+            Token{token_type: TokenType::IDENTIFIER("foobar".to_string()), lexeme: "f".to_string(), line: 0},
+            Token{token_type: TokenType::EqualEqual, lexeme: "=".to_string(), line: 0},
+            Token{token_type: TokenType::NUMBER(f64::from(2)), lexeme: "2".to_string(), line: 0},
+        ];
+        assert_eq!(&expected, tokens);
     }
 }
