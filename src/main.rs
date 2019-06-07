@@ -45,7 +45,11 @@ pub fn run_file(source_file: &String) {
 
 pub fn run(source: String) {
     let mut scanner = loxrust::scanner::Scanner::new(source);
-    let tokens = scanner.scan_tokens();
-    let tokens_as_string = tokens.iter().map(|x| format!("{:?}", x)).collect::<Vec<String>>();
+    let tokens_as_string: Vec<String>;
+    {
+        let tokens = scanner.scan_tokens();
+        tokens_as_string = tokens.iter().map(|x| format!("{:?}", x)).collect::<Vec<String>>();
+    }
     println!("tokens in statement: {:?}", tokens_as_string.join(", "));
+    println!("Errors in statement: {:?}", scanner.errors.join(", "));
 }

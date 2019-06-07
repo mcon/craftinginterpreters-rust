@@ -6,6 +6,14 @@ use std::iter::FromIterator;
 use std::mem::discriminant;
 
 
+#[derive(Clone)]
+#[derive(Debug)]
+pub enum Literal {
+    IDENTIFIER(String),
+    STRING(String),
+    NUMBER(f64)
+}
+
 #[allow(dead_code)]
 #[derive(Clone)]
 #[derive(Debug)]
@@ -34,9 +42,7 @@ pub enum TokenType {
     LessEqual,
 
     // Literals.
-    IDENTIFIER(String),
-    STRING(String),
-    NUMBER(f64),
+    Literal(Literal),
 
     // Keywords.
     AND,
@@ -63,9 +69,9 @@ impl PartialEq for TokenType {
         let self_type = discriminant(self);
         if (self_type == discriminant(other)) {
             return match (self, other) {
-                (TokenType::IDENTIFIER(self_i_string), TokenType::IDENTIFIER(other_i_string)) =>
+                (TokenType::Literal(Literal::IDENTIFIER(self_i_string)), TokenType::Literal(Literal::IDENTIFIER(other_i_string))) =>
                     self_i_string == other_i_string,
-                (TokenType::STRING(self_s_string), TokenType::STRING(other_s_string)) =>
+                (TokenType::Literal(Literal::STRING(self_s_string)), TokenType::Literal(Literal::STRING(other_s_string))) =>
                     self_s_string == other_s_string,
                 // TokenType::NUMBER isn't included here, as floats don't have a well defined notion of equality.
                 _ => true
@@ -98,7 +104,7 @@ pub struct Scanner {
     source: String,
     tokens: Vec<Token>,
     line: usize,
-    errors: Vec<String>
+    pub errors: Vec<String>
 }
 
 impl Scanner {
@@ -196,7 +202,7 @@ impl Scanner {
 
         let newlines: String = string.matches('\n').collect();
         self.line += newlines.len();
-        Some(TokenType::STRING(string))
+        Some(TokenType::Literal(Literal::STRING(string)))
     }
 
     fn scan_number<I>(&mut self, remaining_source: &mut I) -> Option<TokenType>
@@ -207,11 +213,11 @@ impl Scanner {
                 remaining_source.take_while(|x| x.is_digit(10) || x.eq(&'.'));
             let string: String = string_iter.collect();
             if string.ends_with('.') {
-                self.errors.push(format!("Number not permitted to end with '.' {}", self.line));
+                self.errors.push(format!("Number not permitted to end with '.' on line {}", self.line));
                 return None;
             }
             match string.parse::<f64>() {
-                Ok(result) => return Some(TokenType::NUMBER(result)),
+                Ok(result) => return Some(TokenType::Literal(Literal::NUMBER(result))),
                 Err(_) => {
                     self.errors.push(format!("Unable to parse number on line {}", self.line));
                     return None
@@ -247,7 +253,7 @@ impl Scanner {
             "true" => Some(TokenType::TRUE),
             "var" => Some(TokenType::VAR),
             "while" => Some(TokenType::WHILE),
-            identifier => Some(TokenType::IDENTIFIER(identifier.to_string()))
+            identifier => Some(TokenType::Literal(Literal::IDENTIFIER(identifier.to_string())))
         }
     }
 }
@@ -263,11 +269,10 @@ mod tests {
         let mut scanner = Scanner::new(source.to_string());
         let tokens = scanner.scan_tokens();
 
-        // TODO: Change this test to expect the correct lexemes.
         let expected = vec![
-            Token{token_type: TokenType::IDENTIFIER("foobar".to_string()), lexeme: "f".to_string(), line: 0},
+            Token{token_type: TokenType::Literal(Literal::IDENTIFIER("foobar".to_string())), lexeme: "f".to_string(), line: 0},
             Token{token_type: TokenType::EqualEqual, lexeme: "=".to_string(), line: 0},
-            Token{token_type: TokenType::NUMBER(f64::from(2)), lexeme: "2".to_string(), line: 0},
+            Token{token_type: TokenType::Literal(Literal::NUMBER(f64::from(2))), lexeme: "2".to_string(), line: 0},
         ];
         assert_eq!(&expected, tokens);
     }
