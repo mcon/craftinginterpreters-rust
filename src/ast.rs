@@ -10,24 +10,25 @@ pub enum Exp {
 }
 
 pub struct BinaryExp {
-    left: Box<Exp>,
-    operator: Token,
-    right: Box<Exp>
+    pub left: Box<Exp>,
+    pub operator: Token,
+    pub right: Box<Exp>
 }
 
 pub struct GroupingExp {
-    exp: Box<Exp>,
+    pub exp: Box<Exp>,
 }
 
 pub struct UnaryExp {
-    right: Box<Exp>,
-    operator: Token
+    pub right: Box<Exp>,
+    pub operator: Token
 }
 
 pub struct LiteralExp {
-    value: Literal
+    pub value: Literal
 }
 
+// TODO: This should really be an implementation for something like AstBuilder of type String
 fn ast_printer<'a>(builder: &'a mut String, exp: &'a Exp) -> &'a String {
     fn add_parens<'a>(builder: &'a mut String, name: String, exprs: Vec<&Exp>) -> &'a String {
         builder.push_str(format!("({}", name).as_str());
