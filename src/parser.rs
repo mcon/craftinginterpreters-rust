@@ -6,8 +6,8 @@ use std::ops::Index;
 
 #[derive(Clone)]
 pub struct Parser<'a> {
-    pub data: &'a[Token],
-    pub current_position: usize
+    data: &'a[Token],
+    current_position: usize
 }
 
 impl TokenType {
@@ -18,6 +18,12 @@ impl TokenType {
 }
 
 impl<'a> Parser<'a> {
+    pub fn new(data: &'a[Token]) -> Parser<'a> {
+        Parser {
+            data,
+            current_position: 0
+        }
+    }
     fn expression(&mut self) -> Exp {
         self.equality()
     }
@@ -28,9 +34,8 @@ impl<'a> Parser<'a> {
         let mut expr = previous_exp;
 
         fn consume_valid_tokens(instance : &mut Parser, valid_tokens : &[TokenType]) -> bool {
-            let current = instance.data.index(instance.current_position);
-            if current.token_type.matches(valid_tokens)
-                && instance.current_position != instance.data.len() {
+            if instance.current_position != instance.data.len() &&
+                instance.data.index(instance.current_position).token_type.matches(valid_tokens) {
                 instance.current_position += 1;
                 return true
             }
@@ -177,5 +182,22 @@ impl<'a> Parser<'a> {
         }
         panic!("No valid token")
 
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // TODO MC: Actually test unary, and identifier literal - probably fine for now
+    #[test]
+    fn parse_valid_example_expression()
+    {
+        let valid_tokens = vec![
+            Token{token_type: TokenType::Literal(Literal::IDENTIFIER("foobar".to_string())), lexeme: "f".to_string(), line: 0},
+            Token{token_type: TokenType::EqualEqual, lexeme: "=".to_string(), line: 0},
+            Token{token_type: TokenType::Literal(Literal::NUMBER(f64::from(2))), lexeme: "2".to_string(), line: 0},
+        ];
+        let exp = Parser::new(valid_tokens.as_ref()).expression();
     }
 }
