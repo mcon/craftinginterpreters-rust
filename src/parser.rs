@@ -24,14 +24,16 @@ impl<'a> Parser<'a> {
             current_position: 0
         }
     }
-    fn expression(&mut self) -> Exp {
+
+    fn expression(&mut self) -> Result<Exp, String> {
         self.equality()
     }
 
     // TODO: Could implement this whole parser in terms of a huge match statement... Might be simpler...
     fn execute_level(&mut self, valid_tokens : &[TokenType], previous_exp : Exp,
-        current_exp_generator : &Fn(&mut Parser, &Token, Exp) -> Exp) -> Exp {
-        let mut expr = previous_exp;
+        current_exp_generator : &Fn(&mut Parser, &Token, Exp) -> Result<Exp, String>) -> Result<Exp, String> {
+        // TODO MC: Need to return based on whether or not the while loop is consumed, maybe return early?
+        let mut expr = Ok(previous_exp);
 
         fn consume_valid_tokens(instance : &mut Parser, valid_tokens : &[TokenType]) -> bool {
             if instance.current_position != instance.data.len() &&
@@ -41,79 +43,96 @@ impl<'a> Parser<'a> {
             }
             false
         }
-        while (consume_valid_tokens(self, valid_tokens)) {
+        while consume_valid_tokens(self, valid_tokens) {
             let operator = self.data.index(self.current_position - 1);
-            expr = current_exp_generator(self, operator, expr);
+            expr = match expr {
+                Ok(ex) => current_exp_generator(self, operator, ex),
+                err => err
+            }
         }
 
         expr
     }
 
-    fn equality(&mut self) -> Exp {
-        fn next_exp_generator(instance: &mut Parser, operator: &Token, curr_expr: Exp) -> Exp {
-            let right : Exp = instance.comparison();
-            Exp::BinaryExp(
-                BinaryExp{
-                    left: Box::new(curr_expr),
-                    operator: operator.clone(),
-                    right: Box::new(right) })
+    fn equality(&mut self) -> Result<Exp, String> {
+        fn next_exp_generator(instance: &mut Parser, operator: &Token, curr_expr: Exp) -> Result<Exp, String> {
+            instance.comparison().map(
+              |right|  Exp::BinaryExp(
+                  BinaryExp{
+                      left: Box::new(curr_expr),
+                      operator: operator.clone(),
+                      right: Box::new(right) })
+            )
+
         }
-        let prev_exp = self.comparison();
-        self.execute_level(
-            &[TokenType::EqualEqual, TokenType::BangEqual],
-            prev_exp,
-            &next_exp_generator)
+        match self.comparison() {
+            Ok(prev_exp) => self.execute_level(
+                &[TokenType::EqualEqual, TokenType::BangEqual],
+                prev_exp,
+                &next_exp_generator),
+            err => err
+        }
+
     }
 
-    fn comparison(&mut self) -> Exp {
-        fn next_exp_generator(instance: &mut Parser, operator: &Token, curr_expr: Exp) -> Exp {
-            let right : Exp = instance.addition();
-            Exp::BinaryExp(
-                BinaryExp{
-                    left: Box::new(curr_expr),
-                    operator: operator.clone(),
-                    right: Box::new(right) })
+    fn comparison(&mut self) -> Result<Exp, String> {
+        fn next_exp_generator(instance: &mut Parser, operator: &Token, curr_expr: Exp) -> Result<Exp, String> {
+            instance.addition().map(
+                | right | Exp::BinaryExp(
+                    BinaryExp{
+                        left: Box::new(curr_expr),
+                        operator: operator.clone(),
+                        right: Box::new(right) })
+            )
         }
-        let prev_exp = self.addition();
-        self.execute_level(
-            &[TokenType::GREATER, TokenType::GreaterEqual, TokenType::LESS, TokenType::LessEqual],
-            prev_exp,
-            &next_exp_generator)
+        match self.addition() {
+            Ok(prev_exp) => self.execute_level(
+                &[TokenType::GREATER, TokenType::GreaterEqual, TokenType::LESS, TokenType::LessEqual],
+                prev_exp,
+                &next_exp_generator),
+            err => err
+        }
     }
 
-    fn addition(&mut self) -> Exp {
-        fn next_exp_generator(instance: &mut Parser, operator: &Token, curr_expr: Exp) -> Exp {
-            let right : Exp = instance.multiplication();
-            Exp::BinaryExp(
-                BinaryExp{
-                    left: Box::new(curr_expr),
-                    operator: operator.clone(),
-                    right: Box::new(right) })
+    fn addition(&mut self) -> Result<Exp, String> {
+        fn next_exp_generator(instance: &mut Parser, operator: &Token, curr_expr: Exp) -> Result<Exp, String> {
+            instance.multiplication().map(
+                |right| Exp::BinaryExp(
+                    BinaryExp{
+                        left: Box::new(curr_expr),
+                        operator: operator.clone(),
+                        right: Box::new(right) })
+            )
         }
-        let prev_exp = self.multiplication();
-        self.execute_level(
-            &[TokenType::MINUS, TokenType::PLUS],
-            prev_exp,
-            &next_exp_generator)
+        match self.multiplication() {
+            Ok(prev_exp) => self.execute_level(
+                &[TokenType::MINUS, TokenType::PLUS],
+                prev_exp,
+                &next_exp_generator),
+            err => err
+        }
     }
 
-    fn multiplication(&mut self) -> Exp {
-        fn next_exp_generator(instance: &mut Parser, operator: &Token, curr_expr: Exp) -> Exp {
-            let right : Exp = instance.unary();
-            Exp::BinaryExp(
-                BinaryExp{
-                    left: Box::new(curr_expr),
-                    operator: operator.clone(),
-                    right: Box::new(right) })
+    fn multiplication(&mut self) -> Result<Exp, String> {
+        fn next_exp_generator(instance: &mut Parser, operator: &Token, curr_expr: Exp) -> Result<Exp, String> {
+            instance.unary().map(
+                | right | Exp::BinaryExp(
+                    BinaryExp{
+                        left: Box::new(curr_expr),
+                        operator: operator.clone(),
+                        right: Box::new(right) })
+            )
         }
-        let prev_exp = self.unary();
-        self.execute_level(
-            &[TokenType::SLASH, TokenType::STAR],
-            prev_exp,
-            &next_exp_generator)
+        match self.unary() {
+            Ok(prev_exp) => self.execute_level(
+                &[TokenType::SLASH, TokenType::STAR],
+                prev_exp,
+                &next_exp_generator),
+            err => err
+        }
     }
 
-    fn unary(&mut self) -> Exp {
+    fn unary(&mut self) -> Result<Exp, String> {
         let valid_tokens = &[TokenType::BANG, TokenType::MINUS];
         // TODO: If this whole scheme works, then make consume_valid_tokens a top level function and re-use
         fn consume_valid_tokens(instance : &mut Parser, valid_tokens : &[TokenType]) -> bool {
@@ -126,40 +145,41 @@ impl<'a> Parser<'a> {
             false
         }
 
-        if (consume_valid_tokens(self, valid_tokens)) {
+        if consume_valid_tokens(self, valid_tokens) {
             let operator = self.data.index(self.current_position - 1);
-            let right = self.unary();
-            return Exp::UnaryExp(
+            return self.unary().map(
+                | right | Exp::UnaryExp(
                     UnaryExp{
                         right: Box::new(right),
                         operator: operator.clone()})
+            )
         }
 
         self.primary()
     }
 
-    fn primary(&mut self) -> Exp {
-        fn consume_valid_tokens(instance : &mut Parser, valid_tokens : &[TokenType]) -> bool {
+    fn primary(&mut self) -> Result<Exp, String> {
+        fn consume_valid_tokens<'a>(instance : &mut Parser, valid_tokens : &'a [TokenType]) -> Option<&'a Token> {
             let current = instance.data.index(instance.current_position);
             if current.token_type.matches(valid_tokens)
                 && instance.current_position != instance.data.len() {
                 instance.current_position += 1;
-                return true
+                return Some(current)
             }
-            false
+            None
         }
-        if consume_valid_tokens(self, &[TokenType::FALSE]) {
-            return Exp::LiteralExp(LiteralExp{value: Literal::STRING("false".to_string())})
+        if consume_valid_tokens(self, &[TokenType::FALSE]).is_some() {
+            return Ok(Exp::LiteralExp(LiteralExp{value: Literal::STRING("false".to_string())}))
         }
-        if consume_valid_tokens(self, &[TokenType::TRUE]) {
-            return Exp::LiteralExp(LiteralExp{value: Literal::STRING("true".to_string())})
+        if consume_valid_tokens(self, &[TokenType::TRUE]).is_some() {
+            return Ok(Exp::LiteralExp(LiteralExp{value: Literal::STRING("true".to_string())}))
         }
-        if consume_valid_tokens(self, &[TokenType::NIL]) {
-            return Exp::LiteralExp(LiteralExp{value: Literal::STRING("null".to_string())})
+        if consume_valid_tokens(self, &[TokenType::NIL]).is_some() {
+            return Ok(Exp::LiteralExp(LiteralExp{value: Literal::STRING("null".to_string())}))
         }
-        // TODO: Literals not working at the moment - actually, don't even use consume_valid_tokens - do the pattern match for literal here
+        // TODO: Fix up literals by taking the token out of the Option retuned by consume_valid_tokens
         if consume_valid_tokens(self, &[TokenType::Literal(Literal::STRING("".to_string()))]) {
-            return Exp::LiteralExp(LiteralExp{value: Literal::STRING("null".to_string())})
+            return Ok(Exp::LiteralExp(LiteralExp{value: Literal::STRING("null".to_string())}))
         }
         // Match literals
         let current = self.data.index(self.current_position);
@@ -168,26 +188,27 @@ impl<'a> Parser<'a> {
                 if self.current_position != self.data.len() {
                     self.current_position += 1;
                 }
-                return Exp::LiteralExp(LiteralExp{value: literal.clone() })},
-            TokenType::LeftParen | TokenType::RightParen => {},
-            _ => panic!("Didn't expect to get anything other than a literal or paren here")
+                return Ok(Exp::LiteralExp(LiteralExp{value: literal.clone() }))},
+            TokenType::LeftParen => {
+                if consume_valid_tokens(self, &[TokenType::LeftParen]) {
+                    let expr = self.expression();
+                    if consume_valid_tokens(self, &[TokenType::RightParen]) {
+                        return expr.map(|ex| Exp::GroupingExp(GroupingExp{exp: Box::new(ex)}))
+                    }
+                    return Err("Expect ')' after expression.".to_string())
+                }
+                return Err("No valid token".to_string()) // TODO: Unlear why this needs to be String not &str
+            },
+            TokenType::RightParen => panic!("Did not expect to reach this branch of match statement"),
+            _ => Err("Didn't expect to get anything other than a literal or paren here".to_string())
         }
-
-        if consume_valid_tokens(self, &[TokenType::LeftParen]) {
-            let expr = self.expression();
-            if consume_valid_tokens(self, &[TokenType::RightParen]) {
-                return Exp::GroupingExp(GroupingExp{exp: Box::new(expr)})
-            }
-            panic!("Expect ')' after expression.")
-        }
-        panic!("No valid token")
-
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ast::ast_printer;
 
     // TODO MC: Actually test unary, and identifier literal - probably fine for now
     #[test]
@@ -195,9 +216,26 @@ mod tests {
     {
         let valid_tokens = vec![
             Token{token_type: TokenType::Literal(Literal::IDENTIFIER("foobar".to_string())), lexeme: "f".to_string(), line: 0},
-            Token{token_type: TokenType::EqualEqual, lexeme: "=".to_string(), line: 0},
-            Token{token_type: TokenType::Literal(Literal::NUMBER(f64::from(2))), lexeme: "2".to_string(), line: 0},
+            Token{token_type: TokenType::EQUAL, lexeme: "=".to_string(), line: 0},
+            Token{token_type: TokenType::Literal(Literal::NUMBER(i64::from(2))), lexeme: "2".to_string(), line: 0},
         ];
-        let exp = Parser::new(valid_tokens.as_ref()).expression();
+        let expected_exp: Exp = Exp::BinaryExp(
+            BinaryExp {
+                left: Box::new(Exp::LiteralExp(LiteralExp{ value: Literal::STRING("foobar".to_string()) })
+                ),
+                operator: Token {
+                    token_type: TokenType::EQUAL,
+                    lexeme: "=".to_string(),
+                    line: 0
+                },
+                right: Box::new(Exp::LiteralExp(LiteralExp{value: Literal::NUMBER(2)}))});
+        let exp_result = Parser::new(valid_tokens.as_ref()).expression();
+        match exp_result {
+            // TODO: Verify that the expression is valid
+            Ok(exp) => {
+                assert_eq!(exp, expected_exp)
+            },
+            Err(err) => panic!(err)
+        }
     }
 }

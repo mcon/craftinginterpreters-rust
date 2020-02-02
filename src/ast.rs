@@ -1,7 +1,9 @@
 use scanner::Token;
 use scanner::Literal;
-use core::borrow::{Borrow, BorrowMut};
+use core::borrow::{Borrow};
 
+#[derive(Eq, PartialEq)]
+#[derive(Debug)]
 pub enum Exp {
     BinaryExp(BinaryExp),
     GroupingExp(GroupingExp),
@@ -9,27 +11,35 @@ pub enum Exp {
     LiteralExp(LiteralExp)
 }
 
+#[derive(Eq, PartialEq)]
+#[derive(Debug)]
 pub struct BinaryExp {
     pub left: Box<Exp>,
     pub operator: Token,
     pub right: Box<Exp>
 }
 
+#[derive(Eq, PartialEq)]
+#[derive(Debug)]
 pub struct GroupingExp {
     pub exp: Box<Exp>,
 }
 
+#[derive(Eq, PartialEq)]
+#[derive(Debug)]
 pub struct UnaryExp {
     pub right: Box<Exp>,
     pub operator: Token
 }
 
+#[derive(Eq, PartialEq)]
+#[derive(Debug)]
 pub struct LiteralExp {
     pub value: Literal
 }
 
 // TODO: This should really be an implementation for something like AstBuilder of type String
-fn ast_printer<'a>(builder: &'a mut String, exp: &'a Exp) -> &'a String {
+pub fn ast_printer<'a>(builder: &'a mut String, exp: &'a Exp) -> &'a String {
     fn add_parens<'a>(builder: &'a mut String, name: String, exprs: Vec<&Exp>) -> &'a String {
         builder.push_str(format!("({}", name).as_str());
         for exp in exprs {
@@ -82,10 +92,10 @@ mod tests {
                     lexeme: "==".to_string(),
                     line: 0
                 },
-                right: Box::new(Exp::LiteralExp(LiteralExp{value: Literal::NUMBER(1.5)}))});
+                right: Box::new(Exp::LiteralExp(LiteralExp{value: Literal::NUMBER(2)}))});
         let mut output_string = String::new();
         let output = ast_printer(&mut output_string, &binary_exp);
 
-        assert_eq!(*output, "(== (group foobar) 1.5)".to_string());
+        assert_eq!(*output, "(== (group foobar) 2)".to_string());
     }
 }
