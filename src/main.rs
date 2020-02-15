@@ -6,6 +6,7 @@ use argparse::{ArgumentParser, Store};
 use std::fs::File;
 use std::io::BufReader;
 use std::io::prelude::*;
+use loxrust::parser::Parser;
 
 fn main() {
     let mut file_name = String::new();
@@ -48,8 +49,17 @@ pub fn run(source: String) {
     let tokens_as_string: Vec<String>;
     {
         let tokens = scanner.scan_tokens();
+        let mut parser = Parser::new(tokens);
+        let parse_result = parser.parse();
+
+        match parse_result {
+            Ok(exp) => {
+                let mut output_string = String::new();
+                let ast = loxrust::ast::ast_printer(&mut output_string, &exp);
+                println!("Resulting AST: {:?}", ast)
+            }
+            Err(err) => println!("Errors in statement: {:?}", err)
+        }
         tokens_as_string = tokens.iter().map(|x| format!("{:?}", x)).collect::<Vec<String>>();
     }
-    println!("tokens in statement: {:?}", tokens_as_string.join(", "));
-    println!("Errors in statement: {:?}", scanner.errors.join(", "));
 }

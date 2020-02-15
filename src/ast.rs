@@ -38,7 +38,7 @@ pub struct LiteralExp {
     pub value: Literal
 }
 
-// TODO: This should really be an implementation for something like AstBuilder of type String
+// TODO: This should probably allocate the string as part of the function, not mutate one which already exists...
 pub fn ast_printer<'a>(builder: &'a mut String, exp: &'a Exp) -> &'a String {
     fn add_parens<'a>(builder: &'a mut String, name: String, exprs: Vec<&Exp>) -> &'a String {
         builder.push_str(format!("({}", name).as_str());

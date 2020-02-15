@@ -25,6 +25,10 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub fn parse(&mut self) -> Result<Exp, String> {
+        self.expression()
+    }
+
     fn expression(&mut self) -> Result<Exp, String> {
         self.equality()
     }
@@ -159,36 +163,38 @@ impl<'a> Parser<'a> {
     }
 
     fn primary(&mut self) -> Result<Exp, String> {
-        fn consume_valid_tokens<'a>(instance : &mut Parser, valid_tokens : &'a [TokenType]) -> Option<&'a Token> {
+        fn consume_valid_tokens<'a>(instance : &mut Parser, valid_tokens : &'a [TokenType]) -> bool {
             let current = instance.data.index(instance.current_position);
             if current.token_type.matches(valid_tokens)
                 && instance.current_position != instance.data.len() {
                 instance.current_position += 1;
-                return Some(current)
+                return true
             }
-            None
+            false
         }
-        if consume_valid_tokens(self, &[TokenType::FALSE]).is_some() {
-            return Ok(Exp::LiteralExp(LiteralExp{value: Literal::STRING("false".to_string())}))
-        }
-        if consume_valid_tokens(self, &[TokenType::TRUE]).is_some() {
-            return Ok(Exp::LiteralExp(LiteralExp{value: Literal::STRING("true".to_string())}))
-        }
-        if consume_valid_tokens(self, &[TokenType::NIL]).is_some() {
-            return Ok(Exp::LiteralExp(LiteralExp{value: Literal::STRING("null".to_string())}))
-        }
-        // TODO: Fix up literals by taking the token out of the Option retuned by consume_valid_tokens
-        if consume_valid_tokens(self, &[TokenType::Literal(Literal::STRING("".to_string()))]) {
-            return Ok(Exp::LiteralExp(LiteralExp{value: Literal::STRING("null".to_string())}))
+        fn advance(instance : &mut Parser) {
+            if instance.current_position != instance.data.len() {
+                instance.current_position += 1;
+            }
         }
         // Match literals
         let current = self.data.index(self.current_position);
         match current.token_type {
+            TokenType::NIL => {
+                advance(self);
+                Ok(Exp::LiteralExp(LiteralExp{value: Literal::STRING("null".to_string())}))
+            }
+            TokenType::TRUE => {
+                advance(self);
+                Ok(Exp::LiteralExp(LiteralExp{value: Literal::STRING("true".to_string())}))
+            }
+            TokenType::FALSE => {
+                advance(self);
+                Ok(Exp::LiteralExp(LiteralExp{value: Literal::STRING("false".to_string())}))
+            }
             TokenType::Literal(ref literal) => {
-                if self.current_position != self.data.len() {
-                    self.current_position += 1;
-                }
-                return Ok(Exp::LiteralExp(LiteralExp{value: literal.clone() }))},
+                advance(self);
+                Ok(Exp::LiteralExp(LiteralExp{value: literal.clone() }))},
             TokenType::LeftParen => {
                 if consume_valid_tokens(self, &[TokenType::LeftParen]) {
                     let expr = self.expression();
@@ -197,7 +203,7 @@ impl<'a> Parser<'a> {
                     }
                     return Err("Expect ')' after expression.".to_string())
                 }
-                return Err("No valid token".to_string()) // TODO: Unlear why this needs to be String not &str
+                Err("No valid token".to_string()) // TODO: Unlear why this needs to be String not &str
             },
             TokenType::RightParen => panic!("Did not expect to reach this branch of match statement"),
             _ => Err("Didn't expect to get anything other than a literal or paren here".to_string())
@@ -216,22 +222,21 @@ mod tests {
     {
         let valid_tokens = vec![
             Token{token_type: TokenType::Literal(Literal::IDENTIFIER("foobar".to_string())), lexeme: "f".to_string(), line: 0},
-            Token{token_type: TokenType::EQUAL, lexeme: "=".to_string(), line: 0},
+            Token{token_type: TokenType::EqualEqual, lexeme: "==".to_string(), line: 0},
             Token{token_type: TokenType::Literal(Literal::NUMBER(i64::from(2))), lexeme: "2".to_string(), line: 0},
         ];
         let expected_exp: Exp = Exp::BinaryExp(
             BinaryExp {
-                left: Box::new(Exp::LiteralExp(LiteralExp{ value: Literal::STRING("foobar".to_string()) })
+                left: Box::new(Exp::LiteralExp(LiteralExp{ value: Literal::IDENTIFIER("foobar".to_string()) })
                 ),
                 operator: Token {
-                    token_type: TokenType::EQUAL,
-                    lexeme: "=".to_string(),
+                    token_type: TokenType::EqualEqual,
+                    lexeme: "==".to_string(),
                     line: 0
                 },
                 right: Box::new(Exp::LiteralExp(LiteralExp{value: Literal::NUMBER(2)}))});
         let exp_result = Parser::new(valid_tokens.as_ref()).expression();
         match exp_result {
-            // TODO: Verify that the expression is valid
             Ok(exp) => {
                 assert_eq!(exp, expected_exp)
             },
