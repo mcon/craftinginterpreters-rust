@@ -46,7 +46,6 @@ pub fn run_file(source_file: &String) {
 
 pub fn run(source: String) {
     let mut scanner = loxrust::scanner::Scanner::new(source);
-    let tokens_as_string: Vec<String>;
     {
         let tokens = scanner.scan_tokens();
         let mut parser = Parser::new(tokens);
@@ -60,6 +59,5 @@ pub fn run(source: String) {
             }
             Err(err) => println!("Errors in statement: {:?}", err)
         }
-        tokens_as_string = tokens.iter().map(|x| format!("{:?}", x)).collect::<Vec<String>>();
     }
 }

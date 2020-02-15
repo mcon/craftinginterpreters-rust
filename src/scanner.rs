@@ -1,6 +1,8 @@
 use std::str::Chars;
-use std::iter::FromIterator;
+use std::iter::{FromIterator, Peekable};
 use std::mem::discriminant;
+use itertools::{Itertools, PeekingNext};
+use std::slice::Iter;
 
 
 #[derive(Clone)]
@@ -118,7 +120,7 @@ impl Scanner {
     pub fn scan_tokens(&mut self) -> &Vec<Token> {
         // TODO: clone hack
         let temp_copy = self.source.clone();
-        let mut source_iter = temp_copy.chars();
+        let mut source_iter = temp_copy.chars().peekable();
         let mut remaining_chars = source_iter.clone().count();
 
         // TODO: error here
@@ -132,51 +134,105 @@ impl Scanner {
         return &self.tokens;
     }
 
-    fn scan_token(&mut self, remaining_source: &mut Chars) -> Option<Token> {
-        let next_char = remaining_source.next().expect("Have asserted that char is there");
+    fn scan_token(&mut self, remaining_source: &mut Peekable<Chars>) -> Option<Token>
+    {
+        // TODO: Refactor this in terms of peek_next
+        let next_char = remaining_source.peek().expect("Have asserted that char is there").clone();
         let token_match = match next_char {
-            '(' => Some(TokenType::LeftParen),
-            ')' => Some(TokenType::RightParen),
-            '{' => Some(TokenType::LeftBrace),
-            '}' => Some(TokenType::RightBrace),
-            ',' => Some(TokenType::COMMA),
-            '.' => Some(TokenType::DOT),
-            '-' => Some(TokenType::MINUS),
-            '+' => Some(TokenType::PLUS),
-            ';' => Some(TokenType::SEMICOLON),
-            '*' => Some(TokenType::STAR),
-            '!' => if remaining_source.next().expect("Have asserted that char is there") == '='
-                { Some(TokenType::BangEqual) } else { Some(TokenType::BANG) },
-            '=' => if remaining_source.next().expect("Have asserted that char is there") == '='
-                { Some(TokenType::EqualEqual) } else { Some(TokenType::EQUAL) },
-            '<' => if remaining_source.next().expect("Have asserted that char is there") == '='
-                { Some(TokenType::LessEqual) } else { Some(TokenType::LESS) },
-            '>' => if remaining_source.next().expect("Have asserted that char is there") == '='
-                { Some(TokenType::GreaterEqual) } else { Some(TokenType::GREATER) },
-            '/' => if remaining_source.next().expect("Have asserted that char is there") == '/'
+            '(' => {
+                remaining_source.next();
+                Some(TokenType::LeftParen)
+            },
+            ')' => {
+                remaining_source.next();
+                Some(TokenType::RightParen)
+            },
+            '{' => {
+                remaining_source.next();
+                Some(TokenType::LeftBrace)
+            },
+            '}' => {
+                remaining_source.next();
+                Some(TokenType::RightBrace)
+            },
+            ',' => {
+                remaining_source.next();
+                Some(TokenType::COMMA)
+            },
+            '.' => {
+                remaining_source.next();
+                Some(TokenType::DOT)
+            },
+            '-' => {
+                remaining_source.next();
+                Some(TokenType::MINUS)
+            },
+            '+' => {
+                remaining_source.next();
+                Some(TokenType::PLUS)
+            },
+            ';' => {
+                remaining_source.next();
+                Some(TokenType::SEMICOLON)
+            },
+            '*' => {
+                remaining_source.next();
+                Some(TokenType::STAR)
+            },
+            '!' => {
+                remaining_source.next();
+                if remaining_source.next().expect("Have asserted that char is there") == '='
+                { Some(TokenType::BangEqual) } else { Some(TokenType::BANG) }
+            },
+            '=' => {
+                remaining_source.next();
+                if remaining_source.next().expect("Have asserted that char is there") == '='
+                { Some(TokenType::EqualEqual) } else { Some(TokenType::EQUAL) }
+            },
+            '<' => {
+                remaining_source.next();
+                if remaining_source.next().expect("Have asserted that char is there") == '='
+                { Some(TokenType::LessEqual) } else { Some(TokenType::LESS) }
+            },
+            '>' => {
+                remaining_source.next();
+                if remaining_source.next().expect("Have asserted that char is there") == '='
+                { Some(TokenType::GreaterEqual) } else { Some(TokenType::GREATER) }
+            },
+            '/' => {
+                remaining_source.next();
+                if remaining_source.next().expect("Have asserted that char is there") == '/'
                 {
                     remaining_source.skip_while(|x| *x != '\n').next();
                     None
                 } else { Some(TokenType::SLASH) }
-            ' ' => None,
-            '\r' => None,
-            '\t' => None,
+            }
+            ' ' => {
+                remaining_source.next();
+                None
+            },
+            '\r' => {
+                remaining_source.next();
+                None
+            },
+            '\t' => {
+                remaining_source.next();
+                None
+            },
             '\n' => {
+                remaining_source.next();
                 self.line += 1;
                 None
             }
-            '"' => self.scan_string(remaining_source),
-            character @ '0'...'9' => {
-                let mut last_character = character.to_string();
-                let mut larger_string_iter = last_character.chars().chain(remaining_source);
-
-                self.scan_number(&mut larger_string_iter)
+            '"' => {
+                remaining_source.next();
+                self.scan_string(remaining_source)
             },
-            character => {
-                let mut last_character = character.to_string();
-                let mut larger_string_iter = last_character.chars().chain(remaining_source);
-
-                self.scan_keyword_or_identifier(&mut larger_string_iter)
+            character @ '0'...'9' => {
+                self.scan_number(remaining_source)
+            },
+            _ => {
+                self.scan_keyword_or_identifier(remaining_source)
             },
         };
         Some(Token {
@@ -186,7 +242,7 @@ impl Scanner {
         })
     }
 
-    fn scan_string(&mut self, remaining_source: &mut Chars) -> Option<TokenType> {
+    fn scan_string(&mut self, remaining_source: &mut Peekable<Chars>) -> Option<TokenType> {
         let string: String;
         {
             let string_iter =
@@ -203,12 +259,11 @@ impl Scanner {
         Some(TokenType::Literal(Literal::STRING(string)))
     }
 
-    fn scan_number<I>(&mut self, remaining_source: &mut I) -> Option<TokenType>
-        where I: Iterator<Item=char>
+    fn scan_number(&mut self, remaining_source: &mut Peekable<Chars>) -> Option<TokenType>
     {
         {
             let string_iter =
-                remaining_source.take_while(|x| x.is_digit(10) || x.eq(&'.'));
+                remaining_source.peeking_take_while(|x| x.is_digit(10) || x.eq(&'.'));
             let string: String = string_iter.collect();
             if string.ends_with('.') {
                 self.errors.push(format!("Number not permitted to end with '.' on line {}", self.line));
@@ -228,10 +283,10 @@ impl Scanner {
     }
 
     fn scan_keyword_or_identifier<I>(&mut self, remaining_source: &mut I) -> Option<TokenType>
-        where I: Iterator<Item=char>
+        where I: PeekingNext<Item=char>
     {
         let mut string_iter =
-            remaining_source.take_while(|x| x.is_alphanumeric());
+            remaining_source.peeking_take_while(|x| x.is_alphanumeric());
         let string: String = string_iter.collect();
 
         match string.as_str() {
@@ -273,5 +328,23 @@ mod tests {
             Token{token_type: TokenType::Literal(Literal::NUMBER(i64::from(2))), lexeme: "2".to_string(), line: 0},
         ];
         assert_eq!(&expected, tokens);
+    }
+
+    #[test]
+    fn statement_with_brackets()
+    {
+        let source = "(foobar = 2)";
+
+        let mut scanner = Scanner::new(source.to_string());
+        let tokens = scanner.scan_tokens();
+
+        let expected = vec![
+            Token{token_type: TokenType::LeftParen, lexeme: "(".to_string(), line: 0},
+            Token{token_type: TokenType::Literal(Literal::IDENTIFIER("foobar".to_string())), lexeme: "f".to_string(), line: 0},
+            Token{token_type: TokenType::EQUAL, lexeme: "=".to_string(), line: 0},
+            Token{token_type: TokenType::Literal(Literal::NUMBER(i64::from(2))), lexeme: "2".to_string(), line: 0},
+            Token{token_type: TokenType::RightParen, lexeme: ")".to_string(), line: 0},
+        ];
+        assert_eq!(tokens, &expected);
     }
 }
