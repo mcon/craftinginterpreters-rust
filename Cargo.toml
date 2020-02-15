@@ -5,3 +5,4 @@ authors = ["Matthew Constable <bonsty@gmail.com>"]
 
 [dependencies]
 argparse = "0.2.2"
+itertools = "0.8"
