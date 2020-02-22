@@ -217,6 +217,7 @@ impl Scanner {
                 None
             }
             '"' => {
+                // TODO: Scanning of string literals doesn't appear to work at the moment - add some testing.
                 remaining_source.next();
                 self.scan_string(remaining_source)
             },

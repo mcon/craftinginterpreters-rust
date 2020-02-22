@@ -124,7 +124,7 @@ fn interpret_binary(exp : &BinaryExp) -> Result<Value, String> {
         },
         Token { token_type: TokenType::EqualEqual, lexeme, line } => {
             let items : Result<Vec<Value>, _> = [left, right].iter().cloned().collect();
-            items.map(|x| Value::Boolean(!x[0].is_equal(&x[1])))
+            items.map(|x| Value::Boolean(x[0].is_equal(&x[1])))
         },
         Token { token_type, lexeme, line } =>
             Err(format!("Unknown TokenType for binary expression: {:?}, line: {}", token_type, line)),

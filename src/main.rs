@@ -7,6 +7,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::io::prelude::*;
 use loxrust::parser::Parser;
+use loxrust::interpreter::{interpret};
 
 fn main() {
     let mut file_name = String::new();
@@ -55,7 +56,11 @@ pub fn run(source: String) {
             Ok(exp) => {
                 let mut output_string = String::new();
                 let ast = loxrust::ast::ast_printer(&mut output_string, &exp);
-                println!("Resulting AST: {:?}", ast)
+                println!("Resulting AST: {:?}", ast);
+                match interpret(&exp) {
+                    Ok(val) => {println!("{:?}", val)},
+                    Err(e) => {println!("{}", e)},
+                }
             }
             Err(err) => println!("Errors in statement: {:?}", err)
         }
