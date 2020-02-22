@@ -2,7 +2,6 @@ use std::str::Chars;
 use std::iter::{FromIterator, Peekable};
 use std::mem::discriminant;
 use itertools::{Itertools, PeekingNext};
-use std::slice::Iter;
 
 
 #[derive(Clone)]
@@ -14,6 +13,7 @@ pub enum Literal {
     NUMBER(i64)
 }
 
+// TODO: TokenTypes should be split out into Unary, Binary etc for type safety
 #[allow(dead_code)]
 #[derive(Clone)]
 #[derive(Debug)]
@@ -81,14 +81,6 @@ impl PartialEq for TokenType {
     }
 }
 impl Eq for TokenType {}
-
-#[warn(dead_code)]
-enum TokenParseResult {
-    TokenFound((TokenType, usize)),
-    NoToken(usize),
-    Error(String)
-}
-
 
 #[derive(Clone)]
 #[derive(Eq, PartialEq)]
@@ -228,7 +220,7 @@ impl Scanner {
                 remaining_source.next();
                 self.scan_string(remaining_source)
             },
-            character @ '0'...'9' => {
+            character @ '0'..='9' => {
                 self.scan_number(remaining_source)
             },
             _ => {
@@ -285,7 +277,7 @@ impl Scanner {
     fn scan_keyword_or_identifier<I>(&mut self, remaining_source: &mut I) -> Option<TokenType>
         where I: PeekingNext<Item=char>
     {
-        let mut string_iter =
+        let string_iter =
             remaining_source.peeking_take_while(|x| x.is_alphanumeric());
         let string: String = string_iter.collect();
 

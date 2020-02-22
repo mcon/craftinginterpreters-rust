@@ -225,7 +225,6 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ast::ast_printer;
 
     // TODO MC: Actually test unary, and identifier literal - probably fine for now
     #[test]
