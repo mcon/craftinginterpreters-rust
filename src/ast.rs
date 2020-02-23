@@ -4,14 +4,24 @@ use core::borrow::{Borrow};
 
 #[derive(Eq, PartialEq)]
 #[derive(Debug)]
+#[derive(Clone)]
+pub enum Stmt {
+    ExprStmt(Exp),
+    PrintStmt(Exp),
+}
+
+#[derive(Eq, PartialEq)]
+#[derive(Clone)]
+#[derive(Debug)]
 pub enum Exp {
     BinaryExp(BinaryExp),
     GroupingExp(GroupingExp),
     UnaryExp(UnaryExp),
-    LiteralExp(LiteralExp)
+    LiteralExp(LiteralExp),
 }
 
 #[derive(Eq, PartialEq)]
+#[derive(Clone)]
 #[derive(Debug)]
 pub struct BinaryExp {
     pub left: Box<Exp>,
@@ -20,12 +30,14 @@ pub struct BinaryExp {
 }
 
 #[derive(Eq, PartialEq)]
+#[derive(Clone)]
 #[derive(Debug)]
 pub struct GroupingExp {
     pub exp: Box<Exp>,
 }
 
 #[derive(Eq, PartialEq)]
+#[derive(Clone)]
 #[derive(Debug)]
 pub struct UnaryExp {
     pub right: Box<Exp>,
@@ -33,18 +45,19 @@ pub struct UnaryExp {
 }
 
 #[derive(Eq, PartialEq)]
+#[derive(Clone)]
 #[derive(Debug)]
 pub struct LiteralExp {
     pub value: Literal
 }
 
 // TODO: This should probably allocate the string as part of the function, not mutate one which already exists...
-pub fn ast_printer<'a>(builder: &'a mut String, exp: &'a Exp) -> &'a String {
+fn exp_printer<'a>(builder: &'a mut String, exp: &'a Exp) -> &'a String {
     fn add_parens<'a>(builder: &'a mut String, name: String, exprs: Vec<&Exp>) -> &'a String {
         builder.push_str(format!("({}", name).as_str());
         for exp in exprs {
             let sub_string = &mut String::new();
-            let sub_builder = ast_printer(sub_string, exp);
+            let sub_builder = exp_printer(sub_string, exp);
             builder.push_str(format!(" {}", sub_builder).as_str())
         }
         builder.push(')');
@@ -71,6 +84,21 @@ pub fn ast_printer<'a>(builder: &'a mut String, exp: &'a Exp) -> &'a String {
     }
 }
 
+pub fn ast_printer<'a>(builder: &'a mut String, stmt: &'a Stmt) -> &'a String {
+    match stmt {
+        Stmt::ExprStmt(exp) => {
+            exp_printer(builder, exp);
+            builder.push_str(";");
+        },
+        Stmt::PrintStmt(exp) => {
+            builder.push_str("print ");
+            exp_printer(builder, exp);
+            builder.push_str(";");
+        },
+    }
+    builder
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -93,8 +121,10 @@ mod tests {
                     line: 0
                 },
                 right: Box::new(Exp::LiteralExp(LiteralExp{value: Literal::NUMBER(2)}))});
+        let binary_stmt : Stmt = Stmt::ExprStmt(binary_exp);
+
         let mut output_string = String::new();
-        let output = ast_printer(&mut output_string, &binary_exp);
+        let output = ast_printer(&mut output_string, &binary_stmt);
 
         assert_eq!(*output, "(== (group foobar) 2)".to_string());
     }

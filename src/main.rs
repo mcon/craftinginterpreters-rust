@@ -53,12 +53,16 @@ pub fn run(source: String) {
         let parse_result = parser.parse();
 
         match parse_result {
-            Ok(exp) => {
+            Ok(stmts) => {
                 let mut output_string = String::new();
-                let ast = loxrust::ast::ast_printer(&mut output_string, &exp);
-                println!("Resulting AST: {:?}", ast);
-                match interpret(&exp) {
-                    Ok(val) => {println!("{:?}", val)},
+                // Debug the AST being produced
+                for stmt in &stmts {
+                    let ast = loxrust::ast::ast_printer(&mut output_string, stmt);
+                    println!("Resulting AST: {:?}", ast);
+                }
+
+                match interpret(&stmts) {
+                    Ok(_0) => {},
                     Err(e) => {println!("{}", e)},
                 }
             }

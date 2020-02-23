@@ -1,4 +1,4 @@
-use ast::{Exp, BinaryExp, GroupingExp, UnaryExp, LiteralExp};
+use ast::{Exp, BinaryExp, GroupingExp, UnaryExp, LiteralExp, Stmt};
 use scanner::{Literal, Token, TokenType};
 use std::iter::FromIterator;
 
@@ -34,6 +34,22 @@ fn match_items(l : Result<Value, String>, r : Result<Value, String>)
     }
 }
 
+impl ToString for Value {
+    fn to_string(&self) -> String {
+        match self {
+            Value::Nil => {"nil".to_string()},
+            Value::Boolean(bl) => {
+                if *bl {
+                    "true".to_string()
+                } else {
+                    "false".to_string()
+                }},
+            Value::Number(num) => {format!("{}", num)},
+            Value::String(st) => {st.to_string()},
+        }
+    }
+}
+
 impl Value {
     fn is_truthy(&self) -> bool {
         match self {
@@ -55,7 +71,28 @@ impl Value {
     }
 }
 
-pub fn interpret(exp : &Exp) -> Result<Value, String> {
+pub fn interpret(stmts : &Vec<Stmt>) -> Result<(), String> {
+    let stmts_success: Result<Vec<()>, String> = stmts.iter().map(execute).collect();
+
+    stmts_success.map(|x| ())
+}
+
+fn execute(stmt : &Stmt) -> Result<(), String> {
+    match stmt {
+        Stmt::ExprStmt(exp) => {
+            let val = evaluate(exp);
+            val.map(|_| ())
+        },
+        Stmt::PrintStmt(exp) => {
+            let val = evaluate(exp);
+            val.map(|x|
+                println!("{}", x.to_string())
+            )
+        },
+    }
+}
+
+fn evaluate(exp : &Exp) -> Result<Value, String> {
     match exp {
         Exp::BinaryExp(bin_exp) => interpret_binary(bin_exp),
         Exp::GroupingExp(grouping_exp) => interpret_grouping(grouping_exp),
@@ -65,8 +102,8 @@ pub fn interpret(exp : &Exp) -> Result<Value, String> {
 }
 
 fn interpret_binary(exp : &BinaryExp) -> Result<Value, String> {
-    let right = interpret(exp.right.as_ref());
-    let left = interpret(exp.left.as_ref());
+    let right = evaluate(exp.right.as_ref());
+    let left = evaluate(exp.left.as_ref());
 
     fn match_numbers(l : Result<Value, String>, r : Result<Value, String>)
         -> Result<(i64, i64), String> {
@@ -132,11 +169,11 @@ fn interpret_binary(exp : &BinaryExp) -> Result<Value, String> {
 }
 
 fn interpret_grouping(exp : &GroupingExp) -> Result<Value, String> {
-    interpret(exp.exp.as_ref())
+    evaluate(exp.exp.as_ref())
 }
 
 fn interpret_unary(exp : &UnaryExp) -> Result<Value, String> {
-    let right = interpret(exp.right.as_ref());
+    let right = evaluate(exp.right.as_ref());
     match &exp.operator {
         Token { token_type: TokenType::BANG, lexeme: _, line: _ } => {
             right.map(|x| Value::Boolean(!x.is_truthy()))

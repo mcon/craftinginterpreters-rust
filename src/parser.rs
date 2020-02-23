@@ -1,7 +1,7 @@
 use scanner::Token;
 use scanner::TokenType;
 use scanner::Literal;
-use ast::{Exp, BinaryExp, UnaryExp, LiteralExp, GroupingExp};
+use ast::{Exp, BinaryExp, UnaryExp, LiteralExp, GroupingExp, Stmt};
 use std::ops::Index;
 
 #[derive(Clone)]
@@ -25,29 +25,56 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse(&mut self) -> Result<Exp, String> {
+    pub fn parse(&mut self) -> Result<Vec<Stmt>, String> {
+        let mut statements: Vec<Result<Stmt, String>> = vec![];
+        while self.current_position != self.data.len() {
+            statements.push(self.statement());
+        }
+
+        statements.iter().cloned().collect()
+    }
+
+    fn statement(&mut self) -> Result<Stmt, String> {
+        return if self.consume_valid_tokens(&[TokenType::PRINT]) {
+            self.consume_statement_body().map(Stmt::PrintStmt)
+        } else {
+            self.consume_statement_body().map(Stmt::ExprStmt)
+        }
+    }
+
+    fn consume_statement_body(&mut self) -> Result<Exp, String> {
         self.expression()
+            .and_then(|x|
+                if self.consume_valid_tokens(&[TokenType::SEMICOLON]) {
+                    Ok(x)
+                } else {
+                    Err("Expect ';' after value.".to_string())
+                })
     }
 
     fn expression(&mut self) -> Result<Exp, String> {
         self.equality()
     }
 
+    fn consume_valid_tokens(&mut self, valid_tokens : &[TokenType]) -> bool {
+        if self.data.len() <= self.current_position {
+            return false
+        }
+        let current = self.data.index(self.current_position);
+        if current.token_type.matches(valid_tokens)
+            && self.current_position != self.data.len() {
+            self.current_position += 1;
+            return true
+        }
+        false
+    }
+
     // TODO: Could implement this whole parser in terms of a huge match statement... Might be simpler...
     fn execute_level(&mut self, valid_tokens : &[TokenType], previous_exp : Exp,
         current_exp_generator : &Fn(&mut Parser, &Token, Exp) -> Result<Exp, String>) -> Result<Exp, String> {
-        // TODO MC: Need to return based on whether or not the while loop is consumed, maybe return early?
         let mut expr = Ok(previous_exp);
 
-        fn consume_valid_tokens(instance : &mut Parser, valid_tokens : &[TokenType]) -> bool {
-            if instance.current_position != instance.data.len() &&
-                instance.data.index(instance.current_position).token_type.matches(valid_tokens) {
-                instance.current_position += 1;
-                return true
-            }
-            false
-        }
-        while consume_valid_tokens(self, valid_tokens) {
+        while self.consume_valid_tokens(valid_tokens) {
             let operator = self.data.index(self.current_position - 1);
             expr = match expr {
                 Ok(ex) => current_exp_generator(self, operator, ex),
@@ -138,21 +165,8 @@ impl<'a> Parser<'a> {
 
     fn unary(&mut self) -> Result<Exp, String> {
         let valid_tokens = &[TokenType::BANG, TokenType::MINUS];
-        // TODO: If this whole scheme works, then make consume_valid_tokens a top level function and re-use
-        fn consume_valid_tokens(instance : &mut Parser, valid_tokens : &[TokenType]) -> bool {
-            if instance.data.len() <= instance.current_position {
-                return false
-            }
-            let current = instance.data.index(instance.current_position);
-            if current.token_type.matches(valid_tokens)
-                && instance.current_position != instance.data.len() {
-                instance.current_position += 1;
-                return true
-            }
-            false
-        }
 
-        if consume_valid_tokens(self, valid_tokens) {
+        if self.consume_valid_tokens(valid_tokens) {
             let operator = self.data.index(self.current_position - 1);
             return self.unary().map(
                 | right | Exp::UnaryExp(
@@ -166,18 +180,6 @@ impl<'a> Parser<'a> {
     }
 
     fn primary(&mut self) -> Result<Exp, String> {
-        fn consume_valid_tokens<'a>(instance : &mut Parser, valid_tokens : &'a [TokenType]) -> bool {
-            if instance.data.len() <= instance.current_position {
-                return false
-            }
-            let current = instance.data.index(instance.current_position);
-            if current.token_type.matches(valid_tokens)
-                && instance.current_position != instance.data.len() {
-                instance.current_position += 1;
-                return true
-            }
-            false
-        }
         fn advance(instance : &mut Parser) {
             if instance.current_position != instance.data.len() {
                 instance.current_position += 1;
@@ -207,9 +209,9 @@ impl<'a> Parser<'a> {
                 advance(self);
                 Ok(Exp::LiteralExp(LiteralExp{value: literal.clone() }))},
             TokenType::LeftParen => {
-                if consume_valid_tokens(self, &[TokenType::LeftParen]) {
+                if self.consume_valid_tokens(&[TokenType::LeftParen]) {
                     let expr = self.expression();
-                    if consume_valid_tokens(self, &[TokenType::RightParen]) {
+                    if self.consume_valid_tokens(&[TokenType::RightParen]) {
                         return expr.map(|ex| Exp::GroupingExp(GroupingExp{exp: Box::new(ex)}))
                     }
                     return Err("Expect ')' after expression.".to_string())
