@@ -3,6 +3,7 @@ use std::iter::{FromIterator, Peekable};
 use std::mem::discriminant;
 use itertools::{Itertools, PeekingNext};
 
+// TODO: Fix up lexemes to include full strings, not just first character of string
 
 #[derive(Clone)]
 #[derive(Debug)]
@@ -218,6 +219,7 @@ impl Scanner {
             }
             '"' => {
                 // TODO: Scanning of string literals doesn't appear to work at the moment - add some testing.
+                // Don't want the leading '"' denoting a string as part of the literal itself
                 remaining_source.next();
                 self.scan_string(remaining_source)
             },
@@ -239,10 +241,10 @@ impl Scanner {
         let string: String;
         {
             let string_iter =
-                remaining_source.take_while(|x| x.ne(&'"'));
+                remaining_source.take_while(|x| *x != '"');
             string = String::from_iter(string_iter);
         }
-        if remaining_source.peekable().peek().is_none() {
+        if string.len() == 0 {
             self.errors.push(format!("Unterminated string starting on line {}", self.line));
             return None;
         }
@@ -337,6 +339,20 @@ mod tests {
             Token{token_type: TokenType::EQUAL, lexeme: "=".to_string(), line: 0},
             Token{token_type: TokenType::Literal(Literal::NUMBER(i64::from(2))), lexeme: "2".to_string(), line: 0},
             Token{token_type: TokenType::RightParen, lexeme: ")".to_string(), line: 0},
+        ];
+        assert_eq!(tokens, &expected);
+    }
+
+    #[test]
+    fn scan_string()
+    {
+        let source = "\"foobar\"";
+
+        let mut scanner = Scanner::new(source.to_string());
+        let tokens = scanner.scan_tokens();
+
+        let expected = vec![
+            Token{token_type: TokenType::Literal(Literal::STRING("foobar".to_string())), lexeme: "\"".to_string(), line: 0},
         ];
         assert_eq!(tokens, &expected);
     }
