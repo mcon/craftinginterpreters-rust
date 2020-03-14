@@ -57,7 +57,7 @@ pub fn run(source: String) {
                 let mut output_string = String::new();
                 // Debug the AST being produced
                 for stmt in &stmts {
-                    let ast = loxrust::ast::ast_printer(&mut output_string, stmt);
+                    let ast = loxrust::ast::declaration_printer(&mut output_string, stmt);
                     println!("Resulting AST: {:?}", ast);
                 }
 

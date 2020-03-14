@@ -5,8 +5,22 @@ use core::borrow::{Borrow};
 #[derive(Eq, PartialEq)]
 #[derive(Debug)]
 #[derive(Clone)]
-pub enum Stmt {
-    ExprStmt(Exp),
+pub struct VarDecl<'a> {
+    pub identifier : Identifier<'a>,
+    pub exp : Option<Exp>,
+}
+
+#[derive(Eq, PartialEq)]
+#[derive(Debug)]
+#[derive(Clone)]
+pub struct Identifier<'a> (pub &'a str);
+
+#[derive(Eq, PartialEq)]
+#[derive(Debug)]
+#[derive(Clone)]
+pub enum Stmt<'a> {
+    VarDecl(VarDecl<'a>),
+    Statement(Exp),
     PrintStmt(Exp),
 }
 
@@ -51,7 +65,7 @@ pub struct LiteralExp {
     pub value: Literal
 }
 
-// TODO: This should probably allocate the string as part of the function, not mutate one which already exists...
+// TODO: This should probably allocate the string as part of the function, and implement the ToString trait
 fn exp_printer<'a>(builder: &'a mut String, exp: &'a Exp) -> &'a String {
     fn add_parens<'a>(builder: &'a mut String, name: String, exprs: Vec<&Exp>) -> &'a String {
         builder.push_str(format!("({}", name).as_str());
@@ -84,9 +98,21 @@ fn exp_printer<'a>(builder: &'a mut String, exp: &'a Exp) -> &'a String {
     }
 }
 
-pub fn ast_printer<'a>(builder: &'a mut String, stmt: &'a Stmt) -> &'a String {
+pub fn stmt_printer<'a>(builder: &'a mut String, stmt: &'a Stmt) -> &'a String {
     match stmt {
-        Stmt::ExprStmt(exp) => {
+        Stmt::VarDecl(decl) => {
+            builder.push_str("var ");
+            builder.push_str(decl.identifier.0);
+            match &decl.exp {
+                None => {},
+                Some(exp) => {
+                    builder.push_str(" = ");
+                    exp_printer(builder, &exp);
+                    builder.push_str(";");
+                },
+            }
+        },
+        Stmt::Statement(exp) => {
             exp_printer(builder, exp);
             builder.push_str(";");
         },
@@ -121,10 +147,10 @@ mod tests {
                     line: 0
                 },
                 right: Box::new(Exp::LiteralExp(LiteralExp{value: Literal::NUMBER(2)}))});
-        let binary_stmt : Stmt = Stmt::ExprStmt(binary_exp);
+        let binary_stmt : Stmt = Stmt::Statement(binary_exp);
 
         let mut output_string = String::new();
-        let output = ast_printer(&mut output_string, &binary_stmt);
+        let output = stmt_printer(&mut output_string, &binary_stmt);
 
         assert_eq!(*output, "(== (group foobar) 2)".to_string());
     }
