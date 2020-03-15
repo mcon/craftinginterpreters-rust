@@ -5,21 +5,22 @@ use core::borrow::{Borrow};
 #[derive(Eq, PartialEq)]
 #[derive(Debug)]
 #[derive(Clone)]
-pub struct VarDecl<'a> {
-    pub identifier : Identifier<'a>,
+pub struct VarDecl {
+    pub identifier : Identifier,
     pub exp : Option<Exp>,
 }
 
 #[derive(Eq, PartialEq)]
 #[derive(Debug)]
 #[derive(Clone)]
-pub struct Identifier<'a> (pub &'a str);
+#[derive(Hash)]
+pub struct Identifier (pub String);
 
 #[derive(Eq, PartialEq)]
 #[derive(Debug)]
 #[derive(Clone)]
-pub enum Stmt<'a> {
-    VarDecl(VarDecl<'a>),
+pub enum Stmt {
+    VarDecl(VarDecl),
     Statement(Exp),
     PrintStmt(Exp),
 }
@@ -102,7 +103,7 @@ pub fn stmt_printer<'a>(builder: &'a mut String, stmt: &'a Stmt) -> &'a String {
     match stmt {
         Stmt::VarDecl(decl) => {
             builder.push_str("var ");
-            builder.push_str(decl.identifier.0);
+            builder.push_str(decl.identifier.0.as_str());
             match &decl.exp {
                 None => {},
                 Some(exp) => {

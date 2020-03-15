@@ -1,6 +1,8 @@
-use ast::{Exp, BinaryExp, GroupingExp, UnaryExp, LiteralExp, Stmt};
+use ast::{Exp, BinaryExp, GroupingExp, UnaryExp, LiteralExp, Stmt, Identifier};
 use scanner::{Literal, Token, TokenType};
 use std::iter::FromIterator;
+use environment::Environment;
+use std::borrow::Borrow;
 
 #[derive(Eq, PartialEq)]
 #[derive(Debug)]
@@ -17,6 +19,161 @@ enum MatchedValues {
     Boolean(bool, bool),
     Number(i64, i64),
     String(String, String),
+}
+
+pub struct Interpreter {
+    globals : Environment
+}
+
+impl Interpreter {
+    pub fn new() -> Interpreter {
+        Interpreter { globals: Environment::new() }
+    }
+
+    pub fn interpret(&mut self, stmts : &Vec<Stmt>) -> Result<(), String> {
+        let stmts_success: Result<Vec<()>, String> =
+            stmts
+                .iter()
+                .map(|stmt| self.execute(stmt))
+                .collect();
+
+        stmts_success.map(|x| ())
+    }
+
+    fn execute(&mut self, stmt : &Stmt) -> Result<(), String> {
+        match stmt {
+            Stmt::VarDecl(decl) => {
+                let val = match &decl.exp {
+                    None => {Ok(Value::Nil)},
+                    Some(exp) => {self.evaluate(exp)},
+                };
+                val.map(|v| {
+                    self.globals.put(decl.identifier.0.clone(), v);
+                    ()
+                })
+            },
+            Stmt::Statement(exp) => {
+                let val = self.evaluate(exp);
+                val.map(|_| ())
+            },
+            Stmt::PrintStmt(exp) => {
+                let val = self.evaluate(exp);
+                val.map(|x|
+                    println!("{}", x.to_string())
+                )
+            },
+        }
+    }
+
+    fn evaluate(&self, exp : &Exp) -> Result<Value, String> {
+        match exp {
+            Exp::BinaryExp(bin_exp) => self.interpret_binary(bin_exp),
+            Exp::GroupingExp(grouping_exp) => self.interpret_grouping(grouping_exp),
+            Exp::UnaryExp(unary_exp) => self.interpret_unary(unary_exp),
+            Exp::LiteralExp(literal_exp) => self.interpret_literal(literal_exp),
+        }
+    }
+
+    fn interpret_literal(&self, exp : &LiteralExp) -> Result<Value, String> {
+        match &exp.value {
+            Literal::IDENTIFIER(id) => {
+                match self.globals.get(&id.clone()) {
+                    None => {Err(format!("Unable to find global variable: {}", id))},
+                    Some(value) => {Ok(value.clone())},
+                }
+            },
+            Literal::STRING(str_literal) => {Ok(Value::String(str_literal.clone()))},
+            Literal::NUMBER(num_literal) => {Ok(Value::Number(num_literal.clone()))},
+        }
+    }
+
+    fn interpret_binary(&self, exp : &BinaryExp) -> Result<Value, String> {
+        let right = self.evaluate(exp.right.as_ref());
+        let left = self.evaluate(exp.left.as_ref());
+
+        fn match_numbers(l : Result<Value, String>, r : Result<Value, String>)
+                         -> Result<(i64, i64), String> {
+            match_items(l, r)
+                .and_then(|x| match x {
+                    MatchedValues::Number(l, r) => Ok((l, r)),
+                    x => {Err("Non-number values not supported with operator -".to_string())},
+                }
+                )
+        }
+
+        // TODO: Work out whether or not using &str in stead of String is more appropriate / efficient
+        match &exp.operator {
+            Token { token_type: TokenType::MINUS, lexeme, line } => {
+                match_numbers(left, right)
+                    .map(|(l, r)| Value::Number(l - r))
+            },
+            Token { token_type: TokenType::SLASH, lexeme, line } => {
+                match_numbers(left, right)
+                    .map(|(l, r)| Value::Number(l / r))
+            },
+            Token { token_type: TokenType::STAR, lexeme, line } => {
+                match_numbers(left, right)
+                    .map(|(l, r)| Value::Number(l * r))
+            },
+            Token { token_type: TokenType::GREATER, lexeme, line } => {
+                match_numbers(left, right)
+                    .map(|(l, r)| Value::Boolean(l > r))
+            },
+            Token { token_type: TokenType::GreaterEqual, lexeme, line } => {
+                match_numbers(left, right)
+                    .map(|(l, r)| Value::Boolean(l >= r))
+            },
+            Token { token_type: TokenType::LESS, lexeme, line } => {
+                match_numbers(left, right)
+                    .map(|(l, r)| Value::Boolean(l < r))
+            },
+            Token { token_type: TokenType::LessEqual, lexeme, line } => {
+                match_numbers(left, right)
+                    .map(|(l, r)| Value::Boolean(l <= r))
+            },
+            Token { token_type: TokenType::PLUS, lexeme, line } => {
+                match_items(left, right)
+                    .and_then(|x| match x {
+                        MatchedValues::Number(l, r) => Ok(Value::Number(l + r)),
+                        MatchedValues::String(l, r) => {
+                            Ok(Value::String(l + r.as_str()))},
+                        x => {
+                            Err("Only numbers and strings are supported for operator +".to_string())}
+                    })
+            },
+            Token { token_type: TokenType::BangEqual, lexeme, line } => {
+                let items : Result<Vec<Value>, _> = [left, right].iter().cloned().collect();
+                items.map(|x| Value::Boolean(!x[0].is_equal(&x[1])))
+            },
+            Token { token_type: TokenType::EqualEqual, lexeme, line } => {
+                let items : Result<Vec<Value>, _> = [left, right].iter().cloned().collect();
+                items.map(|x| Value::Boolean(x[0].is_equal(&x[1])))
+            },
+            Token { token_type, lexeme, line } =>
+                Err(format!("Unknown TokenType for binary expression: {:?}, line: {}", token_type, line)),
+        }
+    }
+
+    fn interpret_grouping(&self, exp : &GroupingExp) -> Result<Value, String> {
+        self.evaluate(exp.exp.as_ref())
+    }
+
+    fn interpret_unary(&self, exp : &UnaryExp) -> Result<Value, String> {
+        let right = self.evaluate(exp.right.as_ref());
+        match &exp.operator {
+            Token { token_type: TokenType::BANG, lexeme: _, line: _ } => {
+                right.map(|x| Value::Boolean(!x.is_truthy()))
+            },
+            Token { token_type: TokenType::MINUS, lexeme: _, line: _ } => {
+                right.and_then(|x| match x {
+                    Value::Number(value) => {Ok(Value::Number(-value))},
+                    other => {Err(format!("Minus can't be used with this value: {:?}", other))},
+                })
+            },
+            Token { token_type, lexeme: _, line } =>
+                panic!("Unknown TokenType for unary: {:?}, line: {}", token_type, line),
+        }
+    }
 }
 
 fn match_items(l : Result<Value, String>, r : Result<Value, String>)
@@ -68,131 +225,5 @@ impl Value {
                 MatchedValues::Number(l, r) => {l == r},
                 MatchedValues::String(l, r) => {l == r},
             } )
-    }
-}
-
-pub fn interpret(stmts : &Vec<Stmt>) -> Result<(), String> {
-    let stmts_success: Result<Vec<()>, String> = stmts.iter().map(execute).collect();
-
-    stmts_success.map(|x| ())
-}
-
-fn execute(stmt : &Stmt) -> Result<(), String> {
-    match stmt {
-        Stmt::ExprStmt(exp) => {
-            let val = evaluate(exp);
-            val.map(|_| ())
-        },
-        Stmt::PrintStmt(exp) => {
-            let val = evaluate(exp);
-            val.map(|x|
-                println!("{}", x.to_string())
-            )
-        },
-    }
-}
-
-fn evaluate(exp : &Exp) -> Result<Value, String> {
-    match exp {
-        Exp::BinaryExp(bin_exp) => interpret_binary(bin_exp),
-        Exp::GroupingExp(grouping_exp) => interpret_grouping(grouping_exp),
-        Exp::UnaryExp(unary_exp) => interpret_unary(unary_exp),
-        Exp::LiteralExp(literal_exp) => interpret_literal(literal_exp),
-    }
-}
-
-fn interpret_binary(exp : &BinaryExp) -> Result<Value, String> {
-    let right = evaluate(exp.right.as_ref());
-    let left = evaluate(exp.left.as_ref());
-
-    fn match_numbers(l : Result<Value, String>, r : Result<Value, String>)
-        -> Result<(i64, i64), String> {
-        match_items(l, r)
-            .and_then(|x| match x {
-                MatchedValues::Number(l, r) => Ok((l, r)),
-                x => {Err("Non-number values not supported with operator -".to_string())},
-            }
-        )
-    }
-
-    // TODO: Work out whether or not using &str in stead of String is more appropriate / efficient
-    match &exp.operator {
-        Token { token_type: TokenType::MINUS, lexeme, line } => {
-            match_numbers(left, right)
-                .map(|(l, r)| Value::Number(l - r))
-        },
-        Token { token_type: TokenType::SLASH, lexeme, line } => {
-            match_numbers(left, right)
-                .map(|(l, r)| Value::Number(l / r))
-        },
-        Token { token_type: TokenType::STAR, lexeme, line } => {
-            match_numbers(left, right)
-                .map(|(l, r)| Value::Number(l * r))
-        },
-        Token { token_type: TokenType::GREATER, lexeme, line } => {
-            match_numbers(left, right)
-                .map(|(l, r)| Value::Boolean(l > r))
-        },
-        Token { token_type: TokenType::GreaterEqual, lexeme, line } => {
-            match_numbers(left, right)
-                .map(|(l, r)| Value::Boolean(l >= r))
-        },
-        Token { token_type: TokenType::LESS, lexeme, line } => {
-            match_numbers(left, right)
-                .map(|(l, r)| Value::Boolean(l < r))
-        },
-        Token { token_type: TokenType::LessEqual, lexeme, line } => {
-            match_numbers(left, right)
-                .map(|(l, r)| Value::Boolean(l <= r))
-        },
-        Token { token_type: TokenType::PLUS, lexeme, line } => {
-            match_items(left, right)
-                .and_then(|x| match x {
-                    MatchedValues::Number(l, r) => Ok(Value::Number(l + r)),
-                    MatchedValues::String(l, r) => {
-                        Ok(Value::String(l + r.as_str()))},
-                    x => {
-                        Err("Only numbers and strings are supported for operator +".to_string())}
-                })
-        },
-        Token { token_type: TokenType::BangEqual, lexeme, line } => {
-            let items : Result<Vec<Value>, _> = [left, right].iter().cloned().collect();
-            items.map(|x| Value::Boolean(!x[0].is_equal(&x[1])))
-        },
-        Token { token_type: TokenType::EqualEqual, lexeme, line } => {
-            let items : Result<Vec<Value>, _> = [left, right].iter().cloned().collect();
-            items.map(|x| Value::Boolean(x[0].is_equal(&x[1])))
-        },
-        Token { token_type, lexeme, line } =>
-            Err(format!("Unknown TokenType for binary expression: {:?}, line: {}", token_type, line)),
-    }
-}
-
-fn interpret_grouping(exp : &GroupingExp) -> Result<Value, String> {
-    evaluate(exp.exp.as_ref())
-}
-
-fn interpret_unary(exp : &UnaryExp) -> Result<Value, String> {
-    let right = evaluate(exp.right.as_ref());
-    match &exp.operator {
-        Token { token_type: TokenType::BANG, lexeme: _, line: _ } => {
-            right.map(|x| Value::Boolean(!x.is_truthy()))
-        },
-        Token { token_type: TokenType::MINUS, lexeme: _, line: _ } => {
-            right.and_then(|x| match x {
-                Value::Number(value) => {Ok(Value::Number(-value))},
-                other => {Err(format!("Minus can't be used with this value: {:?}", other))},
-            })
-        },
-        Token { token_type, lexeme: _, line } =>
-            panic!("Unknown TokenType for unary: {:?}, line: {}", token_type, line),
-    }
-}
-
-fn interpret_literal(exp : &LiteralExp) -> Result<Value, String> {
-    match &exp.value {
-        Literal::IDENTIFIER(_) => {panic!("Identifier not yet supported")},
-        Literal::STRING(str_literal) => {Ok(Value::String(str_literal.clone()))},
-        Literal::NUMBER(num_literal) => {Ok(Value::Number(*num_literal))},
     }
 }

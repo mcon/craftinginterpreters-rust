@@ -63,18 +63,13 @@ impl<'a> Parser<'a> {
         if let TokenType::Literal(literal) = current.clone().token_type {
             if let Literal::IDENTIFIER(id) = literal {
                 self.current_position += 1;
-                if self.consume_valid_tokens(instances_to_discriminants(&[TokenType::EQUAL]).as_mut()) {
-                    return self.consume_statement_body()
-                        .map(|exp| VarDecl{ identifier: Identifier(id.as_str()), exp: Some(exp) })
-                        .and_then(|exp| {
-                            if self.consume_valid_tokens(instances_to_discriminants(&[TokenType::SEMICOLON]).as_mut()) {
-                                Ok(exp)
-                            } else {
-                                Err("Expected ';' after expression".to_string())
-                            }
+                return if self.consume_valid_tokens(instances_to_discriminants(&[TokenType::EQUAL]).as_mut()) {
+                    self.consume_statement_body()
+                        .map(|exp| {
+                                VarDecl { identifier: Identifier(id), exp: Some(exp) }
                         })
                 } else {
-                    return Err("Expected equals after variable name".to_string())
+                    Err("Expected equals after variable name".to_string())
                 }
             }
             return Err("Expected Identifier token".to_string())

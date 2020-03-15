@@ -7,7 +7,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::io::prelude::*;
 use loxrust::parser::Parser;
-use loxrust::interpreter::{interpret};
+use loxrust::interpreter::Interpreter;
 
 fn main() {
     let mut file_name = String::new();
@@ -27,10 +27,11 @@ fn main() {
 
 pub fn run_prompt() {
     let stdin = io::stdin();
+    let mut interpreter = Interpreter::new();
     for line in stdin.lock().lines() {
         let line = line.unwrap();
         println!("> {}", line);
-        run(line);
+        run(line, &mut interpreter);
     }
 }
 
@@ -38,14 +39,15 @@ pub fn run_file(source_file: &String) {
     let file = File::open(source_file).expect("failed to open file");
 
     let mut buf_reader = BufReader::new(file);
+    let mut interpreter = Interpreter::new();
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).expect("failed to read file contents to buffer");
 
     println!("contents: {}", contents);
-    run(contents);
+    run(contents, &mut interpreter);
 }
 
-pub fn run(source: String) {
+pub fn run(source: String, interpreter: &mut Interpreter) {
     let mut scanner = loxrust::scanner::Scanner::new(source);
     {
         let tokens = scanner.scan_tokens();
@@ -57,11 +59,11 @@ pub fn run(source: String) {
                 let mut output_string = String::new();
                 // Debug the AST being produced
                 for stmt in &stmts {
-                    let ast = loxrust::ast::declaration_printer(&mut output_string, stmt);
+                    let ast = loxrust::ast::stmt_printer(&mut output_string, stmt);
                     println!("Resulting AST: {:?}", ast);
                 }
 
-                match interpret(&stmts) {
+                match interpreter.interpret(&stmts) {
                     Ok(_0) => {},
                     Err(e) => {println!("{}", e)},
                 }
